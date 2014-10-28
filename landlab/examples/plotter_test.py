@@ -7,6 +7,7 @@ from landlab.plot.video_out import VideoPlotter
 from landlab import RasterModelGrid
 import numpy as np
 import pylab
+import copy
 
 from time import time
 
@@ -37,7 +38,8 @@ mg.create_node_array_zeros('planet_surface__elevation')
 z = mg.create_node_array_zeros() + leftmost_elev
 z += initial_slope*np.amax(mg.node_y) - initial_slope*mg.node_y
 #put these values plus roughness into that field
-mg['node'][ 'planet_surface__elevation'] = z + np.random.rand(len(z))/100000.
+z_in = z + np.random.rand(len(z))/100000.
+mg['node'][ 'planet_surface__elevation'] = z_in
 
 # Display a message
 print 'Running ...' 
@@ -45,7 +47,8 @@ print 'Running ...'
 #instantiate the components:
 fr = FlowRouter(mg)
 sp = SPEroder(mg, input_file)
-vid = VideoPlotter(mg, data_centering='node')
+#vid = VideoPlotter(mg, data_centering='node')
+vid_hillsh = VideoPlotter(mg, data_centering='node')
 
 time_on = time()
 #perform the loops:
@@ -55,7 +58,7 @@ for i in xrange(nt):
     mg = fr.route_flow(grid=mg)
     mg = sp.erode(mg)
     #vid.add_frame(mg, 'planet_surface__elevation')
-    vid.add_frame(mg, mg.hillshade(alt=15.), cmap='gray')
+    vid_hillsh.add_frame(mg, mg.hillshade(), cmap='gray')
     
  
 print 'Completed the simulation. Plotting...'
@@ -72,5 +75,5 @@ print 'Time: ', time_off-time_on
 
 #pylab.show()
 
-vid.produce_video(override_min_max=(0,1))
 #vid.produce_video()
+vid_hillsh.produce_video(filename='hillshade.gif',override_min_max=(0,1))

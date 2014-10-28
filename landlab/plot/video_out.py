@@ -21,6 +21,10 @@ movies are recommended. If this irritates you, you can modify your own
 PYTHONPATH to allow .mp4 compilation (try a google search for the warning raised
 by this method for some hints). These (known) issues are apparently likely to 
 resolve themselves in a future release of matplotlib.
+
+Known issues occur if two instances of VideoPlotter with identical parameters
+are instantiated. If you want two videos from the same run, consider saving the
+output manually in your driver, then creating the videos sequentially from it.
 """
 
 import numpy as np
