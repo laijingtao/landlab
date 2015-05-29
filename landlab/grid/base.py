@@ -1001,10 +1001,10 @@ class ModelGrid(ModelDataFields):
         Calculates the difference in quantity *node_values* at every link
         in the grid. Note that this is tonode-fromnode along links, and is
         thus equivalent to positive gradient up.
-
+        
         Parameters
         ----------
-        node_values : ndarary
+        node_values : ndarray or field_name (str)
             Values at grid nodes.
 
         Returns
@@ -1022,6 +1022,8 @@ class ModelGrid(ModelDataFields):
         >>> rmg.calculate_diff_at_links(z)
         array([ 0.,  1.,  0.,  0., -1.,  0.,  0.,  0.,  1., -1.,  0.,  0.])
         """
+        if type(node_values) is str:
+            node_values = self.at_node[node_values]
         return gfuncs.calculate_diff_at_links(self, node_values, out=out)
         
     @track_this_method
@@ -1032,7 +1034,19 @@ class ModelGrid(ModelDataFields):
         in the grid.
         Note that this is tonode-fromnode along links, and is thus equivalent to
         positive gradient up.
+        
+        Parameters
+        ----------
+        node_values : ndarray or field_name (str)
+            Values at grid nodes.
+
+        Returns
+        -------
+        ndarray
+            Differences over links.    
         """
+        if type(node_values) is str:
+            node_values = self.at_node[node_values]
         return gfuncs.calculate_diff_at_active_links(self, node_values,
                                                      out=out)
         
@@ -1043,7 +1057,20 @@ class ModelGrid(ModelDataFields):
         Calculates the gradient in quantity *node_values* at every link
         in the grid.
         This method follows the convention POSITIVE UP.
+        
+        Parameters
+        ----------
+        node_values : ndarray or field_name (str)
+            Values at grid nodes.
+
+        Returns
+        -------
+        ndarray
+            Differences over links.
+
         """
+        if type(node_values) is str:
+            node_values = self.at_node[node_values]
         return gfuncs.calculate_gradients_at_links(self, node_values, out=out)
         
     @track_this_method
@@ -1053,7 +1080,20 @@ class ModelGrid(ModelDataFields):
         Calculates the gradient in quantity *node_values* at each active link
         in the grid.
         This method follows the convention POSITIVE UP.
+         
+        Parameters
+        ----------
+        node_values : ndarray or field_name (str)
+            Values at grid nodes.
+
+        Returns
+        -------
+        ndarray
+            Differences over links.
+
         """
+        if type(node_values) is str:
+            node_values = self.at_node[node_values]
         return gfuncs.calculate_gradients_at_active_links(self, node_values,
                                                           out=out)
         
@@ -1085,7 +1125,20 @@ class ModelGrid(ModelDataFields):
 
         Resolves values provided defined on links into the x and y directions.
         Returns values_along_x, values_along_y
+         
+        Parameters
+        ----------
+        link_values : ndarray or field_name (str)
+            Values at grid links.
+
+        Returns
+        -------
+        (ndarray, ndarray)
+            Values on links resolved into x and y directions.
+
         """
+        if type(link_values) is str:
+            link_values = self.at_link[link_values]
         return gfuncs.resolve_values_on_links(self, link_values, out=out)
 
     def resolve_values_on_active_links(self, link_values, out=None):
@@ -1094,7 +1147,19 @@ class ModelGrid(ModelDataFields):
         Resolves values provided defined on active links into the x and y 
         directions.
         Returns values_along_x, values_along_y
+         
+        Parameters
+        ----------
+        link_values : ndarray or field_name (str)
+            Values at grid links.
+
+        Returns
+        -------
+        (ndarray, ndarray)
+            Values on active links resolved into x and y directions.
         """
+        if type(link_values) is str:
+            link_values = self.at_link[link_values]
         return gfuncs.resolve_values_on_active_links(self, link_values, out=out)
 
 
@@ -1327,7 +1392,21 @@ class ModelGrid(ModelDataFields):
                 .. math::
                     {du \over dt} = \\text{source} - \\text{fd}
             where fd is "flux divergence".
-            
+          
+        Parameters
+        ----------
+        active_link_flux : ndarray or field_name (str)
+            Fluxes at grid links. If an array, must be number_of_active_links
+            long. If a field name, can be the name of a link field (i.e.,
+            containing all links).
+        net_unit_flux : ndarray or field_name (str) (optional)
+            Store the output in this array or field.
+
+        Returns
+        -------
+        ndarray
+            Net unit fluxes for core nodes.   
+           
         Examples
         --------
         >>> import numpy as np
@@ -1364,22 +1443,42 @@ class ModelGrid(ModelDataFields):
         
         if self._DEBUG_TRACK_METHODS:
             print 'ModelGrid.calculate_flux_divergence_at_core_nodes'
-            
+        
+        if type(active_link_flux) is str:
+            try:
+                active_link_flux = self.at_link[active_link_flux][self.active_links]
+            except FieldError:
+                active_link_flux = self.at_active_link[active_link_flux]
+
         assert (len(active_link_flux) == self.number_of_active_links), \
                "incorrect length of active_link_flux array"
             
         # If needed, create net_unit_flux array
-        if net_unit_flux is None:
+        if (net_unit_flux is None) or (type(net_unit_flux) is str):
+            if type(net_unit_flux) is str:
+                field = net_unit_flux
+            else:
+                field = None
             net_unit_flux = numpy.zeros(self.number_of_core_nodes)
         else:
+            field = None
             net_unit_flux[:] = 0.
             
         assert (len(net_unit_flux)) == self.number_of_core_nodes
         
         node_net_unit_flux = self.calculate_flux_divergence_at_nodes(active_link_flux)
-                
-        net_unit_flux = node_net_unit_flux[self.corecell_node]
-                
+        net_unit_flux = node_net_unit_flux[self.core_nodes]
+        
+        if field:
+            try:
+                self.at_node[field][mg.core_nodes] = net_unit_flux
+            except FieldError:
+                try:
+                    self.at_core_node[field] = net_unit_flux
+                except FieldError:
+                    self.add_zeros['node', field]
+                    self.at_node[field][mg.core_nodes] = net_unit_flux
+
         return net_unit_flux
 
 
@@ -1449,7 +1548,25 @@ class ModelGrid(ModelDataFields):
         arrays.
         
         This method is untested with looped boundary conditions.
+         
+        Parameters
+        ----------
+        active_link_flux : ndarray or field_name (str)
+            Fluxes at grid links. If an array, must be number_of_active_links
+            long. If a field name, can be the name of a link field (i.e.,
+            containing all links).
+
+        Returns
+        -------
+        ndarray
+            Net unit fluxes for all nodes.   
         """
+        if type(active_link_flux) is str:
+            try:
+                active_link_flux = self.at_link[active_link_flux][self.active_links]
+            except FieldError:
+                active_link_flux = self.at_active_link[active_link_flux]
+
         return gfuncs.calculate_flux_divergence_at_nodes(self, active_link_flux,
                                                         out=out)
         
@@ -1619,9 +1736,9 @@ class ModelGrid(ModelDataFields):
 
         Parameters
         ----------
-        u : array-like
+        u : array-like or field_name (str)
             Node values to assign to links.
-        v : array-like, optional
+        v : array-like or field_name (str), optional
             Node values to test for upslope-ness.
 
         Returns
@@ -1640,6 +1757,13 @@ class ModelGrid(ModelDataFields):
         """
         if v is None:
             v = numpy.array((0., ))
+        elif type(v) is str:
+            v = self.at_node[v]
+        else:
+            pass
+
+        if type(u) is str:
+            u = self.at_node[u]
 
         fv = numpy.zeros(self.number_of_active_links)
         if len(v) < len(u):
@@ -1780,7 +1904,7 @@ class ModelGrid(ModelDataFields):
         
         Parameters
         ----------
-        node_data : ndarray
+        node_data : ndarray or field_name (str)
             Data values.
         nodata_value : float
             Value that indicates an invalid value.
@@ -1797,6 +1921,9 @@ class ModelGrid(ModelDataFields):
         >>> mg.node_status
         array([4, 4, 4, 4, 4, 4, 0, 1, 4, 1, 1, 1], dtype=int8)
         """
+        if type(node_data) is str:
+            node_data = self.at_node[node_data]
+
         # Find locations where value equals the NODATA code and set these nodes
         # as inactive boundaries.
         nodata_locations = numpy.nonzero(node_data==nodata_value)
@@ -1816,7 +1943,7 @@ class ModelGrid(ModelDataFields):
         
         Parameters
         ----------
-        node_data : ndarray
+        node_data : ndarray or field_name (str)
             Values at grid nodes.
 
         Returns
@@ -1833,6 +1960,8 @@ class ModelGrid(ModelDataFields):
         >>> mg.max_of_link_end_node_values(h)
         array([ 2.,  8.,  6.,  8.,  8.,  3.,  3.])
         """
+        if type(node_data) is str:
+            node_data = self.at_node[node_data]
         return numpy.maximum(node_data[self.activelink_fromnode],
                              node_data[self.activelink_tonode])
         
@@ -2038,7 +2167,8 @@ class ModelGrid(ModelDataFields):
         
         Parameters
         ----------        
-        q : ndarray of floats (1D, length = number of links in grid)
+        q : ndarray of floats (1D, length = number of links in grid) or field_name 
+        (str)
             Variable defined on links
             
         Returns
@@ -2185,7 +2315,8 @@ class ModelGrid(ModelDataFields):
         #>>> q = np.array([4.598, 0.598, -4., -4.598, 4., -0.598, -0.598, -4., -4.598, -0.598, 4., -4.598])
 
         """
-        
+        if type(q) is str:
+            q = self.at_link[q]
         # Create the arrays to hold the node-based values of the x and y components
         # of the vector (q)
         node_vec_x = numpy.zeros(self.number_of_nodes)
