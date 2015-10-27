@@ -13,7 +13,6 @@ from landlab.utils import structured_grid as sgrid
 from landlab.utils import count_repeated_values
 
 from .base import ModelGrid
-from . import grid_funcs as gfuncs
 from .base import (CORE_NODE, FIXED_VALUE_BOUNDARY,
                    FIXED_GRADIENT_BOUNDARY, TRACKS_CELL_BOUNDARY,
                    CLOSED_BOUNDARY, BAD_INDEX_VALUE, FIXED_LINK,
@@ -25,6 +24,8 @@ from ..io.netcdf import write_netcdf
 from landlab.grid.structured_quad import links
 from ..core.utils import as_id_array
 from ..core.utils import add_module_functions_to_class
+from .decorators import return_id_array
+from . import gradients
 
 
 def node_has_boundary_neighbor(mg, id, method='d8'):
@@ -209,7 +210,7 @@ def _old_style_args(args):
 
 def _parse_grid_shape_from_args(args):
     """Get grid shape from args.
-    
+
     Parameters
     ----------
     args : iterable
@@ -235,7 +236,7 @@ def _parse_grid_shape_from_args(args):
 
 def _parse_grid_spacing_from_args(args):
     """Get grid spacing from args.
-    
+
     Parameters
     ----------
     args : iterable
@@ -403,7 +404,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
         (20, 6, 31, 17)
         >>> rmg.status_at_node # doctest : +NORMALIZE_WHITESPACE
         array([1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1],
-              dtype=int8)
+               dtype=int8)
         >>> rmg.node_corecell[3] == BAD_INDEX_VALUE
         True
         >>> rmg.node_corecell[8]
@@ -412,9 +413,9 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
         array([0, 1, 1, 1, 1, 1, 2, 2, 2, 2, 1, 2, 2, 2, 2, 1, 2, 2, 2, 2])
         >>> rmg.node_inlink_matrix # doctest: +NORMALIZE_WHITESPACE
         array([[-1, -1, -1, -1, -1,  0,  1,  2,  3,  4,  5,  6,  7,  8,  9, 10,
-              11, 12, 13, 14],
-             [-1, 15, 16, 17, 18, -1, 19, 20, 21, 22, -1, 23, 24, 25, 26, -1,
-              27, 28, 29, 30]])
+                11, 12, 13, 14],
+               [-1, 15, 16, 17, 18, -1, 19, 20, 21, 22, -1, 23, 24, 25, 26, -1,
+                27, 28, 29, 30]])
         >>> rmg.node_numoutlink
         array([2, 2, 2, 2, 1, 2, 2, 2, 2, 1, 2, 2, 2, 2, 1, 1, 1, 1, 1, 0])
         >>> rmg.node_outlink_matrix[0] # doctest: +NORMALIZE_WHITESPACE
@@ -822,6 +823,27 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
         else:
             raise ValueError('only zero or one arguments accepted')
 
+    @property
+    def number_of_d8_links(self):
+        try:
+            return self._number_of_d8_links
+        except AttributeError:
+            self._number_of_d8_links = self.number_of_links + \
+                4*self.number_of_interior_nodes + \
+                2*(self.number_of_nodes-self.number_of_interior_nodes-4) + 4
+            # cores w 4, edges w 2, corners w 1
+            return self._number_of_d8_links
+
+    @property
+    def number_of_d8_active_links(self):
+        try:
+            return self._number_of_d8_active_links
+        except AttributeError:
+            self._number_of_d8_active_links = self.d8_active_links()[0].size
+            # this creates the diagonals as well, but that's appropriate if
+            # you're already asking for this property
+            return self._number_of_d8_active_links
+
     def diagonal_links_at_node(self, *args):
         """diagonal_links_at_node([node_ids])
         Diagonal links attached to nodes.
@@ -1074,7 +1096,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
         self._diag_activelink_tonode = []
 
         try:
-            already_fixed = self.link_status == FIXED_LINK
+            already_fixed = self._link_status == FIXED_LINK
         except AttributeError:
             already_fixed = np.zeros(self.number_of_links, dtype=bool)
 
@@ -1810,75 +1832,6 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
         """
         return self._dx
 
-    def calculate_gradient_along_node_links(self, node_values, *args, **kwds):
-        """calculate_gradient_along_node_links(node_values [, node_ids], out=None):
-        Gradient of a quantity along neighboring active links at all nodes in
-        the grid.
-
-        Calculate the slopes of *node_values*, given at every node in the grid,
-        relative to the nodes centered at *node_ids*. Note that upward slopes
-        are reported as positive. That is, the gradient is positive if a
-        neighbor node's value is greater than that of the node as *node_ids*.
-
-        If *node_ids* is not provided, calculate the gradients for all
-        nodes in the grid. Nodes surrounded by inactive links will receive
-        four masked entries.
-
-        Use the *out* keyword if you have an array that you want to put the
-        result into. If not given, create and return a new array.
-
-        Returns the gradients of the neighboring links in the order (right,
-        top, left, bottom).
-
-        Note the distinction from calculate_gradient_across_cell_faces() is
-        that this method returns an nnodes-long array. That method returns
-        an ncells-long array.
-        """
-        return rfuncs.calculate_gradient_along_node_links(
-            self, node_values, *args, **kwds)
-
-    def calculate_gradient_across_cell_faces(self, node_values, *args, **kwds):
-        """calculate_gradient_across_cell_faces(node_values [, cell_ids], out=None)
-        Gradient of a quantity cell faces.
-
-        Calculate the slopes of *node_values*, given at every node in the grid,
-        relative to the nodes centered at *cell_ids*. Note that upward slopes
-        are reported as positive. That is, the gradient is positive if a
-        neighbor node's value is greater than that of the node as *cell_ids*.
-
-        If *cell_ids* is not provided, calculate the gradients for all
-        cells in the grid.
-
-        Use the *out* keyword if you have an array that you want to put the
-        result into. If not given, create and return a new array.
-
-        Returns the gradients of the neighboring links in the order (right,
-        top, left, bottom).
-        """
-        return rfuncs.calculate_gradient_across_cell_faces(
-            self, node_values, *args, **kwds)
-
-    def calculate_gradient_across_cell_corners(self, node_values, *args, **kwds):
-        """calculate_gradient_across_cell_corners(node_values [, cell_ids], out=None)
-        Gradient of a quantity across diagonals.
-
-        Calculate the slopes of *node_values*, given at every node in the grid,
-        relative to the nodes centered at *cell_ids*. Note that upward slopes
-        are reported as positive. That is, the gradient is positive if a
-        neighbor node's value is greater than that of the node as *cell_ids*.
-
-        If *cell_ids* is not provided, calculate the gradients for all
-        cells in the grid.
-
-        Use the *out* keyword if you have an array that you want to put the
-        result into. If not given, create and return a new array.
-
-        Returns the gradients of the neighboring links in the order (topright,
-        topleft, bottomleft, bottomright).
-        """
-        return rfuncs.calculate_gradient_across_cell_corners(
-            self, node_values, *args, **kwds)
-
     @property
     def link_length(self):
         """Get lengths of links.
@@ -2000,250 +1953,6 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
             np.concatenate((self.activelink_tonode,
                             self._diag_activelink_tonode))
         )
-
-    def calculate_steepest_descent_across_cell_faces(self, *args, **kwds):
-        """rmg.calculate_steepest_descent_across_cell_faces(node_values, [cell_ids], return_node=False, out=None)
-        Steepest gradient to neighbor nodes.
-
-        Return the steepest downward slopes across cell faces, i.e., only to
-        the orthogonal nodes, ignoring any diagonals.
-
-        Calculate the gradients of *node_values*, given at every node in the
-        grid, relative to the nodes centered at *cell_ids*. Note that upward
-        slopes are reported as positive. That is, the gradient is positive if
-        a neighbor node's value is greater than that of the node as
-        *cell_ids*. Thus, the gradients reported by this method are likely
-        negative.
-
-        If *cell_ids* is not provided, calculate the steepest slope (most
-        negative gradient) for all cells in the grid.
-
-        Use the *out* keyword if you have an array that you want to put the
-        result into. If not given, create and return a new array.
-
-        Use the *return_node* keyword to also return the node id of the node
-        in the direction of the maximum gradient. In this case, the returned
-        object is a length 2 tuple of the two arrays, (gradients, node_IDs).
-
-        Parameters
-        ----------
-        node_values : array-like
-            Node quantities to take gradient of.
-        cell_ids : array-like, optional
-            Cell at which to calculate gradients.
-        return_node : boolean, optional
-            If ``True`` also return node ID to the steepest gradient.
-        out : array_like, optional
-            Alternative output array in which to place the result.  Must
-            be of the same shape and buffer length as the expected output.
-
-        See Also
-        --------
-        calculate_steepest_descent_across_adjacent_cells :
-            neighbors, including diagonals
-
-        Examples
-        --------
-        >>> from landlab import RasterModelGrid
-        >>> rmg = RasterModelGrid(3, 3)
-        >>> node_values = rmg.zeros()
-        >>> node_values[1] = -1
-        >>> rmg.calculate_steepest_descent_across_cell_faces(node_values, 0)
-        masked_array(data = [-1.],
-                     mask = False,
-               fill_value = 1e+20)
-        <BLANKLINE>
-
-        Get both the maximum gradient and the node to which the gradient is
-        measured.
-
-        >>> rmg.calculate_steepest_descent_across_cell_faces(node_values, 0,
-        ...     return_node=True)
-        (array([-1.]), array([1]))
-        """
-        return rfuncs.calculate_steepest_descent_across_cell_faces(
-            self, *args, **kwds)
-
-    def calculate_steepest_descent_across_cell_corners(self, *args, **kwds):
-        """rmg.calculate_steepest_descent_across_cell_corners(node_values [, cell_ids], return_node=False, out=None)
-        Steepest gradient to diagonal nodes.
-
-        Return the steepest descents, i.e., minimum gradients, across diagonal
-        cells.
-
-        Calculate the gradients of *node_values*, given at every node in the
-        grid, relative to the nodes centered at *cell_ids*. Note that upward
-        slopes are reported as positive. That is, the gradient is positive if
-        a neighbor node's value is greater than that of the node as *cell_ids*.
-
-        If *cell_ids* is not provided, calculate the minimum gradient for all
-        cells in the grid.
-
-        Use the *out* keyword if you have an array that you want to put the
-        result into. If not given, create and return a new array.
-
-        Use the *return_node* keyword to also return the node id of the node
-        in the direction of the maximum gradient. In this case, the returned
-        object is a length 2 tuple of the two arrays, (gradients, node_IDs).
-
-        Parameters
-        ----------
-        node_values : array-like
-            Node quantities to take gradient of.
-        cell_ids : array-like, optional
-            Cell at which to calculate gradients.
-        return_node : boolean, optional
-            If ``True`` also return node ID to the steepest gradient.
-        out : array_like, optional
-            Alternative output array in which to place the result.  Must
-            be of the same shape and buffer length as the expected output.
-
-        See Also
-        --------
-        calculate_steepest_descent_across_adjacent_cells :
-            neighbors, including diagonals
-        calculate_steepest_descent_across_cell_faces :
-            just neighbors
-
-        Examples
-        --------
-        >>> from landlab import RasterModelGrid
-        >>> rmg = RasterModelGrid(3, 3)
-        >>> node_values = rmg.zeros()
-        >>> node_values[0] = -1
-        >>> rmg.calculate_steepest_descent_across_cell_corners(node_values, 0)
-        array([-0.70710678])
-
-        Get both the maximum gradient and the node to which the gradient is
-        measured.
-
-        >>> rmg.calculate_steepest_descent_across_cell_corners(node_values, 0, return_node=True)
-        (array([-0.70710678]), array([0]))
-        """
-        return rfuncs.calculate_steepest_descent_across_cell_corners(
-            self, *args, **kwds)
-
-    def calculate_steepest_descent_across_adjacent_cells(self, node_values,
-                                                         *args, **kwds):
-        """rmg.calculate_steepest_descent_across_adjacent_cells(node_values, [cell_ids], method='d4', return_node=False, out=None)
-        Steepest gradient to adjoining nodes.
-
-        Calculate the steepest downward slopes, i.e., the most negative
-        gradients, of *node_values*, given at every node in the grid,
-        relative to the nodes centered at *cell_ids*. Return those (negative)
-        gradients. Note that upward slopes are reported as positive. That is,
-        the gradient is positive if a neighbor node's value is greater than
-        that of the node as *cell_ids*. This method handles both orthogonal
-        and diagonal neighbors.
-
-        If *cell_ids* is not provided, calculate the minimum gradient for all
-        cells in the grid. Note this is a cell ID, not a node ID.
-
-        The default is to only consider neighbor cells to the north, south,
-        east, and west. To also consider gradients to diagonal nodes, set the
-        *method* keyword to *d8* (the default is *d4*).
-
-        Use the *out* keyword if you have an array that you want to put the
-        result into. If not given, create a new array.
-
-        Use the *return_node* keyword to also the node id of the node in the
-        direction of the steepest slope. In this case, the returned object is
-        a length 2 tuple of the two arrays, (gradients, node_IDs).
-
-        Parameters
-        ----------
-        node_values : array-like
-            Node quantities to take gradient of.
-        cell_ids : array-like, optional
-            Cell at which to calculate gradients.
-        return_node : boolean, optional
-            If ``True`` also return node ID to the steepest gradient.
-        out : array_like, optional
-            Alternative output array in which to place the result.  Must
-            be of the same shape and buffer length as the expected output.
-
-        See Also
-        --------
-        calculate_steepest_descent_across_cell_corners :
-            just diagonals
-        calculate_steepest_descent_across_cell_faces :
-            just neighbors
-
-        Examples
-        --------
-        >>> from landlab import RasterModelGrid
-        >>> rmg = RasterModelGrid(4, 4)
-        >>> node_values = rmg.zeros()
-        >>> node_values[1] = -1
-        >>> rmg.calculate_steepest_descent_across_adjacent_cells(
-        ...     node_values, 0)
-        masked_array(data = [-1.],
-                     mask = False,
-               fill_value = 1e+20)
-        <BLANKLINE>
-
-        Get both the maximum gradient and the node to which the gradient is
-        measured.
-
-        >>> rmg.calculate_steepest_descent_across_adjacent_cells(
-        ...     node_values, 0, return_node=True)
-        (array([-1.]), array([1]))
-
-        Use method to choose which neighbors to consider.
-
-        >>> node_values[0] = -10.
-        >>> node_values[1] = -1.
-        >>> rmg.calculate_steepest_descent_across_adjacent_cells(
-        ...     node_values, 0, method='d4', return_node=True)
-        (array([-1.]), array([1]))
-        >>> rmg.calculate_steepest_descent_across_adjacent_cells(
-        ...     node_values, 0, method='d8', return_node=True)
-        (array([-7.07106781]), array([0]))
-        """
-        return rfuncs.calculate_steepest_descent_across_adjacent_cells(
-            self, node_values, *args, **kwds)
-
-    def calculate_max_gradient_across_node(self, u, cell_id):
-        """Maximum gradient between nodes.
-
-        .. deprecated:: 0.1
-            Use :func:`calculate_max_gradient_across_adjacent_cells`
-
-        This method calculates the gradients in u across all 4 faces of the
-        cell with ID cell_id, and across the four diagonals. It then returns
-        the steepest (most negative) of these values, followed by its dip
-        direction (e.g.: 0.12, 225). i.e., this is a D8 algorithm. Slopes
-        downward from the cell are reported as positive.
-
-        This code is actually calculating slopes, not gradients.
-        The max gradient is the most negative, but the max slope is the most
-        positive.  So, this was updated to return the max value, not the
-        min.
-        """
-        return rfuncs.calculate_max_gradient_across_node(self, u, cell_id)
-
-    def calculate_max_gradient_across_node_d4(self, u, cell_id):
-        """Maximum gradient to neighbors.
-
-        .. deprecated:: 0.1
-            Use :func:`calculate_max_gradient_across_cell_faces` instead
-
-        This method calculates the gradients in u across all 4 faces of the
-        cell with ID cell_id. It then returns
-        the steepest (most negative) of these values, followed by its dip
-        direction (e.g.: 90 180). i.e., this is a D4 algorithm. Slopes
-        downward from the cell are reported as positive.
-
-        Note that this is exactly the same as
-        calculate_max_gradient_across_node except that this is d4, and the
-        other is d8.
-
-        This code is actually calculating slopes, not gradients.
-        The max gradient is the most negative, but the max slope is the most
-        positive.  So, this was updated to return the max value, not the
-        min.
-        """
-        return rfuncs.calculate_max_gradient_across_node_d4(self, u, cell_id)
 
     def find_node_in_direction_of_max_slope(self, u, node_id):
         """Node of steepest gradient.
@@ -3205,7 +2914,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
                 raise ValueError(
                     'At the moment, you have to define all your boundaries '
                     'on the same set of values!')
-                # ...We probably want the syntax to be 
+                # ...We probably want the syntax to be
                 # rmg.BCs['process_module']['node'][gradient_of] as AN OBJECT,
                 # to which we can pin these properties
             # The fixed_gradient_nodes should be uniquely defined...
@@ -3453,63 +3162,6 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
             # no fixed grad boundaries have been set
             pass
 
-    def calculate_gradients_at_links(self, node_values, out=None):
-        """Calculate gradients over links.
-
-        .. deprecated:: 0.1
-            Use :func:`calculate_gradient_across_cell_faces`
-                    or :func:`calculate_gradient_across_cell_corners` instead
-        """
-        diffs = gfuncs.calculate_diff_at_links(self, node_values, out=out)
-        return np.divide(diffs, self._dx, out=diffs)
-
-    @track_this_method
-    def calculate_gradients_at_active_links(self, node_values, out=None):
-        """Calculate gradients over active links.
-
-        .. deprecated:: 0.1
-            Use :func:`calculate_gradient_across_cell_faces`
-                    or :func:`calculate_gradient_across_cell_corners` instead
-
-        Calculates the gradient in quantity s at each active link in the grid.
-        This is nearly identical to the method of the same name in ModelGrid,
-        except that it uses self._dx for link length to improve efficiency.
-
-        Note that a negative gradient corresponds to a lower node in the
-        direction of the link.
-
-        Examples
-        --------
-        >>> import numpy as np
-        >>> from landlab import RasterModelGrid
-        >>> rmg = RasterModelGrid(4, 5, 1.0)
-        >>> u = [0., 1., 2., 3., 0.,
-        ...     1., 2., 3., 2., 3.,
-        ...     0., 1., 2., 1., 2.,
-        ...     0., 0., 2., 2., 0.]
-        >>> u = np.array(u)
-        >>> u
-        array([ 0.,  1.,  2.,  3.,  0.,  1.,  2.,  3.,  2.,  3.,  0.,  1.,  2.,
-                1.,  2.,  0.,  0.,  2.,  2.,  0.])
-        >>> grad = rmg.calculate_gradients_at_active_links(u)
-        >>> grad
-        array([ 1.,  1., -1., -1., -1., -1., -1.,  0.,  1.,  1.,  1., -1.,  1.,
-                1.,  1., -1.,  1.])
-
-        For greater speed, sending a pre-created numpy array as an argument
-        avoids having to create a new one with each call:
-
-        >>> grad = np.zeros(rmg.number_of_active_links)
-        >>> u = u*10
-        >>> grad = rmg.calculate_gradients_at_active_links(u, grad)
-        >>> grad
-        array([ 10.,  10., -10., -10., -10., -10., -10.,   0.,  10.,  10.,  10.,
-               -10.,  10.,  10.,  10., -10.,  10.])
-        """
-        diffs = gfuncs.calculate_diff_at_active_links(self, node_values,
-                                                      out=out)
-        return np.divide(diffs, self._dx, out=diffs)
-
     def calculate_gradients_at_d8_active_links(self, node_values, out=None):
         """Calculate gradients over D8 active links.
 
@@ -3569,16 +3221,16 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
         assert(len(max_slope) == self.number_of_nodes)
         assert(len(dstr_node_ids) == self.number_of_nodes)
 
-        gradients = np.zeros(len(link_gradients) + 1)
-        gradients[:-1] = link_gradients
+        gradients = np.zeros(self.number_of_links + 1)
+        gradients[self.active_links] = link_gradients
 
         # Make a matrix of the links. Need to append to this the gradients *on
         # the diagonals*.
         node_links = np.vstack(
-            (gradients[self.node_active_outlink_matrix[0][:]],
-             gradients[self.node_active_outlink_matrix[1][:]],
-             - gradients[self.node_active_inlink_matrix[0][:]],
-             - gradients[self.node_active_inlink_matrix[1][:]]))
+            (gradients[self.node_active_outlink_matrix2[0][:]],
+             gradients[self.node_active_outlink_matrix2[1][:]],
+             - gradients[self.node_active_inlink_matrix2[0][:]],
+             - gradients[self.node_active_inlink_matrix2[1][:]]))
 
         # calc the gradients on the diagonals:
         diagonal_nodes = (sgrid.diagonal_node_array(
@@ -4013,7 +3665,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
         [topright, topleft, bottomleft, bottomright].
 
         .. note::
-            
+
             This is equivalent to the diagonals of all cells,
             and setting the neighbors of boundary-node cells to -1. In such a
             case, each node has one cell and each node-cell pair have the
@@ -4240,6 +3892,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
         """
         return sgrid.right_edge_node_ids(self.shape)
 
+    @return_id_array
     def grid_coords_to_node_id(self, row, col, **kwds):
         """Convert node indices to node ID.
 
@@ -4281,8 +3934,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
         >>> mg.grid_coords_to_node_id([2, 0], [3, 4])
         array([13,  4])
         """
-        ids = np.ravel_multi_index((row, col), self.shape, **kwds)
-        return as_id_array(ids)
+        return np.ravel_multi_index((row, col), self.shape, **kwds)
 
     def _setup_face_widths(self):
         """Set up array of face widths.
@@ -4853,7 +4505,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
         >>> rmg.status_at_node # doctest: +NORMALIZE_WHITESPACE
         array([2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 0, 0, 0, 0, 0, 0, 0, 2, 2, 0, 0,
                0, 0, 0, 0, 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2], dtype=int8)
-        >>> rmg.link_status # doctest: +NORMALIZE_WHITESPACE
+        >>> rmg.status_at_link # doctest: +NORMALIZE_WHITESPACE
         array([4, 2, 2, 2, 2, 2, 2, 2, 4, 4, 0, 0, 0, 0, 0, 0, 0, 4, 4, 2, 2,
                2, 2, 2, 2, 2, 4, 4, 4, 4, 4, 4, 4, 4, 4, 2, 0, 0, 0, 0, 0, 0,
                2, 2, 0, 0, 0, 0, 0, 0, 2, 4, 4, 4, 4, 4, 4, 4, 4])
@@ -4888,7 +4540,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
             # Set the node and link boundary statuses to
             # FIXED_GRADIENT_BOUNDARY and FIXED_LINK respectively.
             self._node_status[bottom_nodes] = FIXED_GRADIENT_BOUNDARY
-            self.link_status[bottom_edge] = FIXED_LINK
+            self._link_status[bottom_edge] = FIXED_LINK
 
             # Append the node and link ids to the array created earlier to
             # track boundary statuses
@@ -4902,7 +4554,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
             right_nodes = self.right_edge_node_ids()
 
             # Set the new boundary statuses
-            self.link_status[right_edge] = FIXED_LINK
+            self._link_status[right_edge] = FIXED_LINK
             self._node_status[right_nodes] = FIXED_GRADIENT_BOUNDARY
 
             # Add the IDs to the array...
@@ -4916,7 +4568,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
             top_nodes = self.top_edge_node_ids()
 
             # Set the new boundary statuses
-            self.link_status[top_edge] = FIXED_LINK
+            self._link_status[top_edge] = FIXED_LINK
             self._node_status[top_nodes] = FIXED_GRADIENT_BOUNDARY
 
             # Add the IDs to the array...
@@ -4930,7 +4582,7 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
             left_nodes = self.left_edge_node_ids()
 
             # Set the new boundary statuses
-            self.link_status[left_edge] = FIXED_LINK
+            self._link_status[left_edge] = FIXED_LINK
             self._node_status[left_nodes] = FIXED_GRADIENT_BOUNDARY
 
             # Add the IDs to the array...
@@ -4964,12 +4616,12 @@ class RasterModelGrid(ModelGrid, RasterModelGridPlotter):
                 (tonode_status == FIXED_GRADIENT_BOUNDARY))
 
             # ... and setting their status to INACTIVE_LINK
-            self.link_status[inactive_links] = INACTIVE_LINK
+            self._link_status[inactive_links] = INACTIVE_LINK
 
             # Anywhere there are still FIXED_LINK statuses are our boundary
             # links
-            fixed_links = np.where(self.link_status == FIXED_LINK)
-            self.link_status[fixed_links] = FIXED_LINK
+            fixed_links = np.where(self._link_status == FIXED_LINK)
+            self._link_status[fixed_links] = FIXED_LINK
 
         # Readjust the fixed_nodes array to make sure entries are ints, aren't
         # duplicated and sorted from lowest value to highest.
@@ -5152,3 +4804,7 @@ add_module_functions_to_class(RasterModelGrid, 'raster_mappers.py',
                               pattern='map_*')
 add_module_functions_to_class(RasterModelGrid, 'raster_aspect.py',
                               pattern='calculate_slope_aspect*')
+add_module_functions_to_class(RasterModelGrid, 'raster_gradients.py',
+                              pattern='calculate_*')
+add_module_functions_to_class(RasterModelGrid, 'raster_steepest_descent.py',
+                              pattern='calculate_*')
