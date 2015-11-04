@@ -14,9 +14,13 @@ from landlab.plot.imshow import imshow_node_grid
 from landlab.io.esri_ascii import write_esri_ascii
 from landlab import RasterModelGrid
 
+from landlab.components.flow_routing.lake_mapper import DepressionFinderAndRouter
+
 import numpy as np
 import pylab
 import os
+
+import pdb
 
 #get the needed properties to build the grid:
 input_file = './coupled_params.txt'
@@ -83,6 +87,8 @@ sp = SPEroder(mg, input_file)
 #diffuse = PerronNLDiffuse(mg, input_file)
 lin_diffuse = LinearDiffuser(grid=mg, input_stream=input_file)
 
+df = DepressionFinderAndRouter(mg)
+
 #instantiate plot setting
 pylab.close('all')
 plot_time = plot_interval
@@ -100,6 +106,10 @@ for i in xrange(nt):
     #mg = diffuse.diffuse(mg, i*dt)
     mg = lin_diffuse.diffuse(dt)
     mg = fr.route_flow()
+
+    #pdb.set_trace()
+
+    df.map_depressions(pits=None)
     mg = sp.erode(mg, dt)
     mg.at_node['topographic__elevation'][mg.core_nodes] += uplift_per_step
 
