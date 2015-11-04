@@ -688,7 +688,14 @@ class DepressionFinderAndRouter(Component):
             outlet_neighbors[inlake] = -1
             unique_outs, unique_indxs = np.unique(outlet_neighbors,
                                                   return_index=True)
-            out_draining = unique_outs[1:]
+                
+            #BUG!! out_draining include BAD_INDEX_VALUE.  (JL Nov 2015)
+            i = len(unique_outs)-1
+            while unique_outs[i]==BAD_INDEX_VALUE:
+                i -= 1
+            temp_flag = i
+
+            out_draining = unique_outs[1:temp_flag+1]
             if isinstance(self._grid, landlab.grid.raster.RasterModelGrid):
                 link_l = self._link_lengths
             else:  # Voronoi
@@ -696,7 +703,7 @@ class DepressionFinderAndRouter(Component):
                     outlet_node]][::-1]  # note order reversal
             eff_slopes = ((self._elev[outlet_node] -
                            self._elev[out_draining]) /
-                          link_l[unique_indxs[1:]])
+                          link_l[unique_indxs[1:temp_flag+1]])
             lowest = np.argmax(eff_slopes)
             lowest_node = out_draining[lowest]
             # route the flow
