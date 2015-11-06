@@ -14,7 +14,9 @@ from landlab.plot.imshow import imshow_node_grid
 from landlab.io.esri_ascii import write_esri_ascii
 from landlab import RasterModelGrid
 
-from landlab.components.flow_routing.lake_mapper import DepressionFinderAndRouter
+#from landlab.components.flow_routing.lake_mapper import DepressionFinderAndRouter
+from flow_direction_over_flat import FlowRouterOverFlat
+from pit_remove import PitRemove 
 
 import numpy as np
 import pylab
@@ -78,16 +80,18 @@ mg.set_closed_boundaries_at_grid_edges(True, False, True, True)
 bdy_moraine_ids = np.where((mg.node_y > moraine_start_y) & (mg.node_x == 0))
 mg.status_at_node[bdy_moraine_ids]=4
 mg.update_links_nodes_cells_to_new_BCs()
+
 # Display a message
 print 'Running ...' 
 
 #instantiate the components:
-fr = FlowRouter(mg)
+#fr = FlowRouter(mg)
+fr = FlowRouterOverFlat(mg)
+pr = PitRemove(mg)
 sp = SPEroder(mg, input_file)
 #diffuse = PerronNLDiffuse(mg, input_file)
 lin_diffuse = LinearDiffuser(grid=mg, input_stream=input_file)
 
-df = DepressionFinderAndRouter(mg)
 
 #instantiate plot setting
 pylab.close('all')
@@ -104,12 +108,10 @@ if not os.path.isdir(savepath):
 for i in xrange(nt):
     #note the input arguments here are not totally standardized between modules
     #mg = diffuse.diffuse(mg, i*dt)
-    mg = lin_diffuse.diffuse(dt)
-    mg = fr.route_flow()
-
     #pdb.set_trace()
-
-    df.map_depressions(pits=None)
+    mg = lin_diffuse.diffuse(dt)
+    mg = pr.pit_fill()
+    mg = fr.route_flow()    
     mg = sp.erode(mg, dt)
     mg.at_node['topographic__elevation'][mg.core_nodes] += uplift_per_step
 

@@ -11,7 +11,7 @@ rightmost_elevation: meters
 initial_slope: m/m
 0.
 dt:years
-1000.
+5000.
 total_time:years
 100000.
 uplift_rate:m/yr

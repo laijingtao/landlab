@@ -30,9 +30,6 @@ class PitRemove(Component):
 		#self._visited = numpy.array([False]*self._grid.number_of_nodes)
 		self._huge_number = 32767
 
-		self._z = self._grid.at_node['topographic__elevation']
-		self._w = numpy.array([0.0]*self._grid.number_of_nodes)
-
 
 	def _get_node_id(self, r, c):
 
@@ -90,8 +87,10 @@ class PitRemove(Component):
 		#fill pit
 
 		#initialisation
+		self._z = self._grid['node']['topographic__elevation']
+		self._w = numpy.array([0.0]*self._grid.number_of_nodes)
 		n = self._grid.number_of_nodes
-		(border, ) = numpy.where(numpy.logical_or(self._grid.node_status==1, self._grid.node_status==2))
+		(border, ) = numpy.where(numpy.logical_or(self._grid.status_at_node==1, self._grid.status_at_node==2))
 		for i in range(n):
 			if i in border:
 				self._w[i] = self._z[i]
@@ -132,7 +131,7 @@ class PitRemove(Component):
 					victory = True
 					break
 
-		self._grid.at_node['topographic__elevation_modified'] = self._w
+		self._grid['node']['topographic__elevation_modified'] = self._w
 
 		return self._grid
 
