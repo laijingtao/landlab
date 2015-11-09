@@ -11,6 +11,7 @@ import Queue
 
 import landlab
 from landlab import Component, FieldError
+from landlab.grid.base import BAD_INDEX_VALUE
 
 from landlab.components.flow_routing.flow_direction_DN import grid_flow_directions
 
@@ -23,26 +24,12 @@ class FlowRouterOverFlat(Component):
 		self._grid = input_grid
 		
 		self._n = self._grid.number_of_nodes
-		self._nrows, self._ncols = self._grid.shape
 		(self._boundary, ) = np.where(self._grid.status_at_node!=0)
 		(self._open_boundary, ) = np.where(np.logical_or(self._grid.status_at_node==1, self._grid.status_at_node==2))
 		(self._close_boundary, ) = np.where(self._grid.status_at_node==4)
 
-		self._neighbor_dR = np.array([0, 0, 1, -1, 1, 1, -1, -1])
-		self._neighbor_dC = np.array([1, -1, 0, 0, 1, -1, 1, -1])
-
-
-	def _get_node_id(self, r, c):
-
-		return r*self._ncols+c
-
-
-	def _get_node_coord(self, nodeid):
-
-		r = self._grid.node_y[nodeid]/self._grid.dx
-		c = self._grid.node_x[nodeid]/self._grid.dx
-
-		return r, c
+		self._neighbors = np.concatenate((self._grid.neighbors_at_node, self._grid.diagonals_at_node), axis=1)
+		self._neighbors[self._neighbors == BAD_INDEX_VALUE] = -1
 
 
 	def route_flow(self, receiver, dem='topographic__elevation'):
@@ -56,9 +43,9 @@ class FlowRouterOverFlat(Component):
 		"""
 		self._flow_receiver = receiver
 		#(self._flow_receiver, ss) = grid_flow_directions(self._grid, self._dem)
-		
-		flat_mask, labels = self.resolve_flats()
 
+		flat_mask, labels = self._resolve_flats()
+		#pdb.set_trace()
 		self._flow_dirs_over_flat_d8(flat_mask, labels)
 
 
@@ -69,13 +56,13 @@ class FlowRouterOverFlat(Component):
 		return self._flow_receiver
 
 
-	def resolve_flats(self):
+	def _resolve_flats(self):
 
 		flat_mask = np.zeros(self._n, dtype='float')
 		labels = np.zeros(self._n, dtype='int')
-		
+
 		high_edges, low_edges = self._flat_edges()
-		
+
 		"""
 		if low_edges.empty():
 			if not(high_edges.empty()):
@@ -99,7 +86,7 @@ class FlowRouterOverFlat(Component):
 			if labels[c]==0 remove c from high_edges
 		"""
 		flat_height = np.zeros(k, dtype='float')
-		#pdb.set_trace()
+
 		flat_mask, flat_height = self._away_from_higher(flat_mask, labels, flat_height, high_edges)
 		flat_mask, flat_height = self._towards_lower(flat_mask, labels, flat_height, low_edges)
 
@@ -114,13 +101,10 @@ class FlowRouterOverFlat(Component):
 		for node in range(self._n):
 			if node in self._boundary:
 				continue
-			r, c = self._get_node_coord(node)
 			for i in range(8):
-				neighbor_r = r+self._neighbor_dR[i]
-				neighbor_c = c+self._neighbor_dC[i]
-				if neighbor_r<0 or neighbor_c<0 or neighbor_r>=self._nrows or neighbor_c>=self._ncols:
+				neighbor_node = self._neighbors[node][i]
+				if neighbor_node==-1:
 					continue
-				neighbor_node = self._get_node_id(neighbor_r, neighbor_c)
 				if neighbor_node in self._boundary:
 					if self._flow_receiver[node]==node and (neighbor_node in self._close_boundary):
 						high_edges.put(node)
@@ -144,20 +128,18 @@ class FlowRouterOverFlat(Component):
 		elev = self._dem[node]
 		while not(to_fill.empty()):
 			node = to_fill.get()
-			if self._dem[node]!=elev:
-				continue
 			if labels[node]!=0:
 				continue
 			labels[node] = labelid
-
-			r, c = self._get_node_coord(node)
 			for i in range(8):
-				neighbor_r = r+self._neighbor_dR[i]
-				neighbor_c = c+self._neighbor_dC[i]
-				if neighbor_r<0 or neighbor_c<0 or neighbor_r>=self._nrows or neighbor_c>=self._ncols:
+				neighbor_node = self._neighbors[node][i]
+				if neighbor_node==-1:
 					continue
-				neighbor_node = self._get_node_id(neighbor_r, neighbor_c)
 				if neighbor_node in self._boundary:
+					continue
+				if labels[neighbor_node]!=0:
+					continue
+				if self._dem[neighbor_node]!=elev:
 					continue
 				to_fill.put(neighbor_node)
 
@@ -183,14 +165,15 @@ class FlowRouterOverFlat(Component):
 			flat_mask[node] = k
 			flat_height[labels[node]] = k
 
-			r, c = self._get_node_coord(node)
 			for i in range(8):
-				neighbor_r = r+self._neighbor_dR[i]
-				neighbor_c = c+self._neighbor_dC[i]
-				if neighbor_r<0 or neighbor_c<0 or neighbor_r>=self._nrows or neighbor_c>=self._ncols:
+				neighbor_node = self._neighbors[node][i]
+				if neighbor_node==-1:
 					continue
-				neighbor_node = self._get_node_id(neighbor_r, neighbor_c)
 				if neighbor_node in self._boundary:
+					continue
+				if flat_mask[neighbor_node]>0:
+					continue
+				if neighbor_node in high_edges.queue:
 					continue
 				if labels[neighbor_node]==labels[node] and self._flow_receiver[neighbor_node]==neighbor_node:
 					high_edges.put(neighbor_node)
@@ -200,7 +183,6 @@ class FlowRouterOverFlat(Component):
 
 	def _towards_lower(self, flat_mask, labels, flat_height, low_edges):
 
-		#pdb.set_trace()
 		flat_mask = 0-flat_mask
 		k = 1
 		MARKER = -100
@@ -221,14 +203,15 @@ class FlowRouterOverFlat(Component):
 			else:
 				flat_mask[node] = 2*k
 
-			r, c = self._get_node_coord(node)
 			for i in range(8):
-				neighbor_r = r+self._neighbor_dR[i]
-				neighbor_c = c+self._neighbor_dC[i]
-				if neighbor_r<0 or neighbor_c<0 or neighbor_r>=self._nrows or neighbor_c>=self._ncols:
+				neighbor_node = self._neighbors[node][i]
+				if neighbor_node==-1:
 					continue
-				neighbor_node = self._get_node_id(neighbor_r, neighbor_c)
 				if neighbor_node in self._boundary:
+					continue
+				if flat_mask[neighbor_node]>0:
+					continue
+				if neighbor_node in low_edges.queue:
 					continue
 				if labels[neighbor_node]==labels[node] and self._flow_receiver[neighbor_node]==neighbor_node:
 					low_edges.put(neighbor_node)
@@ -241,21 +224,14 @@ class FlowRouterOverFlat(Component):
 		flow_receiver = np.arange(self._n)
 
 		for node in range(self._n):
-			#if node==1234:
-				#pdb.set_trace()
-			#if node==248888:
-				#pdb.set_trace()
 			if node in self._boundary:
 				continue
 			min_elev = dem[node]
 			receiver = node
-			r, c = self._get_node_coord(node)
 			for i in range(8):
-				neighbor_r = r+self._neighbor_dR[i]
-				neighbor_c = c+self._neighbor_dC[i]
-				if neighbor_r<0 or neighbor_c<0 or neighbor_r>=self._nrows or neighbor_c>=self._ncols:
+				neighbor_node = self._neighbors[node][i]
+				if neighbor_node==-1:
 					continue
-				neighbor_node = self._get_node_id(neighbor_r, neighbor_c)
 				if neighbor_node in self._open_boundary:
 					receiver = neighbor_node
 					break
@@ -272,22 +248,28 @@ class FlowRouterOverFlat(Component):
 	def _flow_dirs_over_flat_d8(self, flat_mask, labels):
 
 		for node in range(self._n):
+			if node in self._boundary:
+				continue
 			if self._flow_receiver[node]!=node:
 				continue
+			"""
 			min_elev = flat_mask[node]
 			receiver = node
-			r, c = self._get_node_coord(node)
 			for i in range(8):
-				neighbor_r = r+self._neighbor_dR[i]
-				neighbor_c = c+self._neighbor_dC[i]
-				if neighbor_r<0 or neighbor_c<0 or neighbor_r>=self._nrows or neighbor_c>=self._ncols:
+				neighbor_node = self._neighbors[node][i]
+				if neighbor_node==-1:
 					continue
-				neighbor_node = self._get_node_id(neighbor_r, neighbor_c)
 				if labels[neighbor_node]!=labels[node]:
 					continue
 				if flat_mask[neighbor_node]<min_elev:
 					min_elev = flat_mask[neighbor_node]
 					receiver = neighbor_node
+			"""
+			potential_receiver = self._neighbors[node]
+			potential_receiver = potential_receiver[np.where(potential_receiver!=-1)]
+			potential_receiver = potential_receiver[np.where(labels[potential_receiver]==labels[node])]
+			receiver = potential_receiver[np.argmin(flat_mask[potential_receiver])]
+			
 			self._flow_receiver[node] = receiver
 
 

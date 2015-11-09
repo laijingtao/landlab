@@ -266,13 +266,13 @@ class FlowRouter(Component):
 
         #print 'sinks:', sink
 
-        """
-        #JL Nov 2015. add flow routing over flat
+        
+        #JL Nov 2015. Add flow routing over flat
         fr_over_flat = FlowRouterOverFlat(self._grid)
         receiver = fr_over_flat.route_flow(receiver)
         node_id = numpy.arange(self._grid.number_of_nodes)
         (sink, ) = numpy.where(node_id==receiver)
-        """
+        
 
         # Calculate drainage area, discharge, and ...
         a, q, s = flow_accum_bw.flow_accumulation(receiver, sink,
