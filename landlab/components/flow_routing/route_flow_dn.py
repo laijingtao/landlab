@@ -25,7 +25,7 @@ from landlab import RasterModelGrid, VoronoiDelaunayGrid  # for type tests
 import numpy
 import inspect
 
-#JL add a flow routing over flat part
+#add a flow routing over flat part. JL Nov 2015
 from landlab.components.flow_routing.flow_direction_over_flat import FlowRouterOverFlat
 
 #output_suppression_flag = True
@@ -266,13 +266,13 @@ class FlowRouter(Component):
 
         #print 'sinks:', sink
 
-        
+        """
         #JL Nov 2015. add flow routing over flat
         fr_over_flat = FlowRouterOverFlat(self._grid)
         receiver = fr_over_flat.route_flow(receiver)
         node_id = numpy.arange(self._grid.number_of_nodes)
         (sink, ) = numpy.where(node_id==receiver)
-        
+        """
 
         # Calculate drainage area, discharge, and ...
         a, q, s = flow_accum_bw.flow_accumulation(receiver, sink,
