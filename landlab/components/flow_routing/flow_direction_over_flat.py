@@ -87,6 +87,7 @@ class FlowRouterOverFlat(Component):
 		"""
 		flat_height = np.zeros(k, dtype='float')
 
+		#this part is bottleneck
 		flat_mask, flat_height = self._away_from_higher(flat_mask, labels, flat_height, high_edges)
 		flat_mask, flat_height = self._towards_lower(flat_mask, labels, flat_height, low_edges)
 
@@ -95,8 +96,8 @@ class FlowRouterOverFlat(Component):
 
 	def _flat_edges(self):
 
-		low_edges = Queue.Queue()
-		high_edges = Queue.Queue()
+		low_edges = Queue.Queue(maxsize=self._n*2)
+		high_edges = Queue.Queue(maxsize=self._n*2)
 		
 		for node in range(self._n):
 			if node in self._boundary:
@@ -122,7 +123,7 @@ class FlowRouterOverFlat(Component):
 
 	def _label_flats(self, labels, node, labelid):
 
-		to_fill = Queue.Queue()
+		to_fill = Queue.Queue(maxsize=self._n*2)
 
 		to_fill.put(node)
 		elev = self._dem[node]
