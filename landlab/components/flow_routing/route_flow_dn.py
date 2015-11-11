@@ -157,7 +157,7 @@ class FlowRouter(Component):
         self.links_to_receiver = model_grid.create_node_array_zeros('links_to_flow_receiver')
 
 
-    def route_flow(self, method='D8'):
+    def route_flow(self, method='D8', routing_flat=False):
         """
         Routes surface-water flow by (1) assigning to each node a single
         drainage direction, and then (2) adding up the number of nodes that
@@ -268,10 +268,11 @@ class FlowRouter(Component):
 
         
         #JL Nov 2015. Add flow routing over flat
-        fr_over_flat = FlowRouterOverFlat(self._grid)
-        receiver = fr_over_flat.route_flow(receiver)
-        node_id = numpy.arange(self._grid.number_of_nodes)
-        (sink, ) = numpy.where(node_id==receiver)
+        if routing_flat:
+            fr_over_flat = FlowRouterOverFlat(self._grid)
+            receiver = fr_over_flat.route_flow(receiver)
+            node_id = numpy.arange(self._grid.number_of_nodes)
+            (sink, ) = numpy.where(node_id==receiver)
         
 
         # Calculate drainage area, discharge, and ...
