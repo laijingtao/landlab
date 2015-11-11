@@ -7,6 +7,7 @@
 
 from landlab.components.flow_routing.route_flow_dn import FlowRouter
 from landlab.components.stream_power.fastscape_stream_power import SPEroder
+from landlab.components.sink_fill.pit_remove import PitRemove
 from landlab.components.sink_fill.fill_sinks import SinkFiller
 from landlab.components.diffusion.diffusion import LinearDiffuser
 from landlab import ModelParameterDictionary
@@ -14,8 +15,6 @@ from landlab import ModelParameterDictionary
 from landlab.plot.imshow import imshow_node_grid
 from landlab.io.esri_ascii import write_esri_ascii
 from landlab import RasterModelGrid
-
-from pit_remove import PitRemove 
 
 import numpy as np
 import pylab
@@ -98,7 +97,7 @@ plot_time = plot_interval
 plot_num = 0
 
 #folder name
-savepath = 'All dry_dt=' + str(dt) + '_total_time=' + str(runtime) + '_k_sp=' + \
+savepath = 'Not all dry_dt=' + str(dt) + '_total_time=' + str(runtime) + '_k_sp=' + \
             str(k_sp) + '_uplift_rate=' + str(uplift_rate) + '(exist_ramp_rightmost=' + str(rightmost_elevation) + ')'
 if not os.path.isdir(savepath):
     os.makedirs(savepath)
@@ -110,8 +109,8 @@ for i in xrange(nt):
     #pdb.set_trace()
     mg = lin_diffuse.diffuse(dt)
     #mg = sf.fill_pits()
-    mg = pr.pit_fill()
-    mg = fr.route_flow(routing_flat=True)    
+    #mg = pr.pit_fill()
+    mg = fr.route_flow(routing_flat=False)    
     mg = sp.erode(mg, dt)
     mg.at_node['topographic__elevation'][mg.core_nodes] += uplift_per_step
 
