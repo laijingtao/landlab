@@ -42,4 +42,4 @@ valley_width:m
 valley_depth:m
 20
 number_of_outputs: number
-10
+20

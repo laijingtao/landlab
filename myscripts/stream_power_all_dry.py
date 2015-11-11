@@ -7,6 +7,7 @@
 
 from landlab.components.flow_routing.route_flow_dn import FlowRouter
 from landlab.components.stream_power.fastscape_stream_power import SPEroder
+from landlab.components.sink_fill.fill_sinks import SinkFiller
 from landlab.components.diffusion.diffusion import LinearDiffuser
 from landlab import ModelParameterDictionary
 #from landlab.plot import channel_profile as prf
@@ -14,8 +15,6 @@ from landlab.plot.imshow import imshow_node_grid
 from landlab.io.esri_ascii import write_esri_ascii
 from landlab import RasterModelGrid
 
-#from landlab.components.flow_routing.lake_mapper import DepressionFinderAndRouter
-from flow_direction_over_flat import FlowRouterOverFlat
 from pit_remove import PitRemove 
 
 import numpy as np
@@ -85,8 +84,8 @@ mg.update_links_nodes_cells_to_new_BCs()
 print 'Running ...' 
 
 #instantiate the components:
-#fr = FlowRouter(mg)
-fr = FlowRouterOverFlat(mg)
+fr = FlowRouter(mg)
+sf = SinkFiller(mg)
 pr = PitRemove(mg)
 sp = SPEroder(mg, input_file)
 #diffuse = PerronNLDiffuse(mg, input_file)
@@ -99,7 +98,7 @@ plot_time = plot_interval
 plot_num = 0
 
 #folder name
-savepath = 'dt=' + str(dt) + '_total_time=' + str(runtime) + '_k_sp=' + \
+savepath = 'All dry_dt=' + str(dt) + '_total_time=' + str(runtime) + '_k_sp=' + \
             str(k_sp) + '_uplift_rate=' + str(uplift_rate) + '(exist_ramp_rightmost=' + str(rightmost_elevation) + ')'
 if not os.path.isdir(savepath):
     os.makedirs(savepath)
@@ -110,8 +109,9 @@ for i in xrange(nt):
     #mg = diffuse.diffuse(mg, i*dt)
     #pdb.set_trace()
     mg = lin_diffuse.diffuse(dt)
+    #mg = sf.fill_pits()
     mg = pr.pit_fill()
-    mg = fr.route_flow()    
+    mg = fr.route_flow(routing_flat=True)    
     mg = sp.erode(mg, dt)
     mg.at_node['topographic__elevation'][mg.core_nodes] += uplift_per_step
 
@@ -125,6 +125,12 @@ for i in xrange(nt):
                 '_k_sp=' + str(k_sp) + '_uplift_rate=' + str(uplift_rate) + '.jpg')
         write_esri_ascii(savepath + '/Topography_dt=' + str(dt) + '_t=' + str((i+1)*dt) + 
                 '_k_sp=' + str(k_sp) + '_uplift_rate=' + str(uplift_rate) + '.txt', mg, 'topographic__elevation')
+
+        plot_num += 1
+        pylab.figure(plot_num)
+        im = imshow_node_grid(mg, 'flow_sinks', cmap = 'Blues')
+        pylab.savefig(savepath + '/sink_dt=' + str(dt) + '_t=' + str((i+1)*dt) + 
+                '_k_sp=' + str(k_sp) + '_uplift_rate=' + str(uplift_rate) + '.jpg')
 
         """
         plot_num += 1
@@ -144,20 +150,9 @@ for i in xrange(nt):
         plot_time += plot_interval
         pylab.close('all')
 
-    print 'Completed loop ', i
+    print 'Completed loop ', i+1
  
-print 'Completed the simulation. Plotting...'
-
-''' 
-#test
-m = 0.5
-n = 1
-g = k_sp*(b**m)*(c**n)
-h = a - g*1000 + uplift_per_step
-temp = RasterModelGrid(10, 10, 10)
-temp.at_node['topographic__elevation'] = h
-write_esri_ascii((savepath + '/test.txt'), temp, 'topographic__elevation')
-'''
+#print 'Completed the simulation. Plotting...'
 
 print('Done.')
 
