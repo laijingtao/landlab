@@ -1,6 +1,6 @@
 """
 flow_direction_over_flat.py
-Implementation of Barnes et al.(2001)
+Implementation of Barnes et al.(2014)
 
 Created by JL, Oct 2015
 """
