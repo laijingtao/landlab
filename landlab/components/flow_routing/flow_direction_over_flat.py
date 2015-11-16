@@ -98,24 +98,24 @@ class FlowRouterOverFlat(Component):
 
 		low_edges = Queue.Queue(maxsize=self._n*2)
 		high_edges = Queue.Queue(maxsize=self._n*2)
-		
+		high_put = high_edges.put
+		low_put = low_edges.put
 		for node in range(self._n):
 			if node in self._boundary:
 				continue
-			for i in range(8):
-				neighbor_node = self._neighbors[node][i]
+			for neighbor_node in self._neighbors[node]:
 				if neighbor_node==-1:
 					continue
 				if neighbor_node in self._boundary:
 					if self._flow_receiver[node]==node and (neighbor_node in self._close_boundary):
-						high_edges.put(node)
+						high_put(node)
 						break
 					continue	
 				if self._flow_receiver[node]!=node and self._flow_receiver[neighbor_node]==neighbor_node and self._dem[node]==self._dem[neighbor_node]:
-					low_edges.put(node)
+					low_put(node)
 					break
 				elif self._flow_receiver[node]==node and self._dem[node]<self._dem[neighbor_node]:
-					high_edges.put(node)
+					high_put(node)
 					break
 
 		return high_edges, low_edges
@@ -124,16 +124,15 @@ class FlowRouterOverFlat(Component):
 	def _label_flats(self, labels, node, labelid):
 
 		to_fill = Queue.Queue(maxsize=self._n*2)
-
-		to_fill.put(node)
+		to_fill_put = to_fill.put
+		to_fill_put(node)
 		elev = self._dem[node]
 		while not(to_fill.empty()):
 			node = to_fill.get()
 			if labels[node]!=0:
 				continue
 			labels[node] = labelid
-			for i in range(8):
-				neighbor_node = self._neighbors[node][i]
+			for neighbor_node in self._neighbors[node]:
 				if neighbor_node==-1:
 					continue
 				if neighbor_node in self._boundary:
@@ -142,7 +141,7 @@ class FlowRouterOverFlat(Component):
 					continue
 				if self._dem[neighbor_node]!=elev:
 					continue
-				to_fill.put(neighbor_node)
+				to_fill_put(neighbor_node)
 
 		return labels
 
@@ -151,14 +150,16 @@ class FlowRouterOverFlat(Component):
 
 		k = 1
 		MARKER = -100
-		high_edges.put(MARKER)
+		high_put = high_edges.put
+		high_get = high_edges.get
+		high_put(MARKER)
 
 		while high_edges.qsize()>1:
-			node = high_edges.get()
+			node = high_get()
 
 			if node==MARKER:
 				k += 1
-				high_edges.put(MARKER)
+				high_put(MARKER)
 				continue
 			if flat_mask[node]>0:
 				continue
@@ -166,8 +167,7 @@ class FlowRouterOverFlat(Component):
 			flat_mask[node] = k
 			flat_height[labels[node]] = k
 
-			for i in range(8):
-				neighbor_node = self._neighbors[node][i]
+			for neighbor_node in self._neighbors[node]:
 				if neighbor_node==-1:
 					continue
 				if neighbor_node in self._boundary:
@@ -177,7 +177,7 @@ class FlowRouterOverFlat(Component):
 				if neighbor_node in high_edges.queue:
 					continue
 				if labels[neighbor_node]==labels[node] and self._flow_receiver[neighbor_node]==neighbor_node:
-					high_edges.put(neighbor_node)
+					high_put(neighbor_node)
 
 		return flat_mask, flat_height
 
@@ -187,14 +187,16 @@ class FlowRouterOverFlat(Component):
 		flat_mask = 0-flat_mask
 		k = 1
 		MARKER = -100
-		low_edges.put(MARKER)
+		low_put = low_edges.put
+		low_get = low_edges.get
+		low_put(MARKER)
 
 		while low_edges.qsize()>1:
-			node = low_edges.get()
+			node = low_get()
 
 			if node==MARKER:
 				k += 1
-				low_edges.put(MARKER)
+				low_put(MARKER)
 				continue
 			if flat_mask[node]>0:
 				continue
@@ -204,8 +206,7 @@ class FlowRouterOverFlat(Component):
 			else:
 				flat_mask[node] = 2*k
 
-			for i in range(8):
-				neighbor_node = self._neighbors[node][i]
+			for neighbor_node in self._neighbors[node]:
 				if neighbor_node==-1:
 					continue
 				if neighbor_node in self._boundary:
@@ -215,7 +216,7 @@ class FlowRouterOverFlat(Component):
 				if neighbor_node in low_edges.queue:
 					continue
 				if labels[neighbor_node]==labels[node] and self._flow_receiver[neighbor_node]==neighbor_node:
-					low_edges.put(neighbor_node)
+					low_put(neighbor_node)
 
 		return flat_mask, flat_height
 
@@ -229,8 +230,7 @@ class FlowRouterOverFlat(Component):
 				continue
 			min_elev = dem[node]
 			receiver = node
-			for i in range(8):
-				neighbor_node = self._neighbors[node][i]
+			for neighbor_node in self._neighbors[node]:
 				if neighbor_node==-1:
 					continue
 				if neighbor_node in self._open_boundary:
