@@ -22,7 +22,7 @@ class FlowRouterOverFlat(Component):
 	def __init__(self, input_grid):
 
 		self._grid = input_grid
-		
+
 		self._n = self._grid.number_of_nodes
 		(self._boundary, ) = np.where(self._grid.status_at_node!=0)
 		(self._open_boundary, ) = np.where(np.logical_or(self._grid.status_at_node==1, self._grid.status_at_node==2))
@@ -110,7 +110,7 @@ class FlowRouterOverFlat(Component):
 					if self._flow_receiver[node]==node and (neighbor_node in self._close_boundary):
 						high_put(node)
 						break
-					continue	
+					continue
 				if self._flow_receiver[node]!=node and self._flow_receiver[neighbor_node]==neighbor_node and self._dem[node]==self._dem[neighbor_node]:
 					low_put(node)
 					break
@@ -152,9 +152,10 @@ class FlowRouterOverFlat(Component):
 		MARKER = -100
 		high_put = high_edges.put
 		high_get = high_edges.get
+		high_qsize = high_edges.qsize
 		high_put(MARKER)
 
-		while high_edges.qsize()>1:
+		while high_qsize()>1:
 			node = high_get()
 
 			if node==MARKER:
@@ -163,7 +164,7 @@ class FlowRouterOverFlat(Component):
 				continue
 			if flat_mask[node]>0:
 				continue
-			
+
 			flat_mask[node] = k
 			flat_height[labels[node]] = k
 
@@ -189,9 +190,10 @@ class FlowRouterOverFlat(Component):
 		MARKER = -100
 		low_put = low_edges.put
 		low_get = low_edges.get
+		low_qsize = low_edges.qsize
 		low_put(MARKER)
 
-		while low_edges.qsize()>1:
+		while low_qsize()>1:
 			node = low_get()
 
 			if node==MARKER:
@@ -270,7 +272,5 @@ class FlowRouterOverFlat(Component):
 			potential_receiver = potential_receiver[np.where(potential_receiver!=-1)]
 			potential_receiver = potential_receiver[np.where(labels[potential_receiver]==labels[node])]
 			receiver = potential_receiver[np.argmin(flat_mask[potential_receiver])]
-			
+
 			self._flow_receiver[node] = receiver
-
-

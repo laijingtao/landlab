@@ -36,13 +36,15 @@ class PitFiller(Component):
         raised_get = raised_node.get
         priority_put = priority_queue.put
         priority_get = priority_queue.get
+        raised_empty = raised_node.empty
+        priority_empty = priority_queue.empty
 
         for i in self._open_boundary:
             priority_put((self._dem[i], i))
             closed[i] = True
 
-        while not(raised_node.empty()) or not(priority_queue.empty()):
-            if not(raised_node.empty()):
+        while not(raised_empty()) or not(priority_empty()):
+            if not(raised_empty()):
                 node = raised_get()
             else:
                 elev, node = priority_get()
