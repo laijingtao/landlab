@@ -15,7 +15,6 @@ from landlab.grid.base import BAD_INDEX_VALUE
 
 from landlab.components.flow_routing.flow_direction_DN import grid_flow_directions
 
-import pdb
 
 class FlowRouterOverFlat(Component):
 
@@ -58,34 +57,26 @@ class FlowRouterOverFlat(Component):
 
 	def _resolve_flats(self):
 
-		flat_mask = np.zeros(self._n, dtype='float')
+		is_flat = np.zeros(self._n, dtype=bool)
+		node_id = np.arange(self._n)
+		(sink, ) = np.where(node_id==self._flow_receiver)
+		for node in sink:
+			if node in self._close_boundary:
+				continue
+			if not(is_flat[node]):
+				is_flat = self._identify_flats(is_flat, node)
+
+		high_edges, low_edges = self._flat_edges(is_flat)
+
 		labels = np.zeros(self._n, dtype='int')
+		labelid = 1
+		for node in low_edges.queue:
+			if labels[node]==0:
+				labels = self._label_flats(labels, node, labelid)
+				labelid += 1
 
-		high_edges, low_edges = self._flat_edges()
-
-		"""
-		if low_edges.empty():
-			if not(high_edges.empty()):
-				print 'There are undrainable flats!'
-			else:
-				print 'There are no flats!'
-			return
-		"""
-
-		k = 1
-		for c in low_edges.queue:
-			if labels[c]==0:
-				labels = self._label_flats(labels, c, k)
-				k = k+1
-
-		"""
-		#It's hard ...find another way...
-		temp_queue = high_edges
-		while not(temp_queue.empty()):
-			c = temp_queue.get()
-			if labels[c]==0 remove c from high_edges
-		"""
-		flat_height = np.zeros(k, dtype='float')
+		flat_mask = np.zeros(self._n, dtype='float')
+		flat_height = np.zeros(labelid, dtype='float')
 
 		#this part is bottleneck
 		flat_mask, flat_height = self._away_from_higher(flat_mask, labels, flat_height, high_edges)
@@ -94,7 +85,38 @@ class FlowRouterOverFlat(Component):
 		return flat_mask, labels
 
 
-	def _flat_edges(self):
+	def _identify_flats(self, is_flat, node):
+
+		to_fill = Queue.Queue(maxsize=self._n*2)
+		to_fill_put = to_fill.put
+		to_fill_get = to_fill.get
+		to_fill_empty = to_fill.empty
+
+		closed = np.zeros(self._n, dtype=bool)
+		closed[node] = True
+		to_fill_put(node)
+		elev = self._dem[node]
+		while not(to_fill_empty()):
+			node = to_fill_get()
+			if is_flat[node]:
+				continue
+			is_flat[node] = True
+			for neighbor_node in self._neighbors[node]:
+				if neighbor_node==-1:
+					continue
+				if self._dem[neighbor_node]!=elev:
+					continue
+				if neighbor_node in self._boundary:
+					continue
+				if is_flat[neighbor_node] or closed[neighbor_node]:
+					continue
+				closed[neighbor_node] = True
+				to_fill_put(neighbor_node)
+
+		return is_flat
+
+
+	def _flat_edges(self, is_flat):
 
 		low_edges = Queue.Queue(maxsize=self._n*2)
 		high_edges = Queue.Queue(maxsize=self._n*2)
@@ -102,6 +124,8 @@ class FlowRouterOverFlat(Component):
 		low_put = low_edges.put
 		for node in range(self._n):
 			if node in self._boundary:
+				continue
+			if not(is_flat[node]):
 				continue
 			for neighbor_node in self._neighbors[node]:
 				if neighbor_node==-1:
@@ -125,10 +149,15 @@ class FlowRouterOverFlat(Component):
 
 		to_fill = Queue.Queue(maxsize=self._n*2)
 		to_fill_put = to_fill.put
+		to_fill_get = to_fill.get
+		to_fill_empty = to_fill.empty
+
+		closed = np.zeros(self._n, dtype=bool)
+		closed[node] = True
 		to_fill_put(node)
 		elev = self._dem[node]
-		while not(to_fill.empty()):
-			node = to_fill.get()
+		while not(to_fill_empty()):
+			node = to_fill_get()
 			if labels[node]!=0:
 				continue
 			labels[node] = labelid
@@ -137,10 +166,11 @@ class FlowRouterOverFlat(Component):
 					continue
 				if neighbor_node in self._boundary:
 					continue
-				if labels[neighbor_node]!=0:
-					continue
 				if self._dem[neighbor_node]!=elev:
 					continue
+				if labels[neighbor_node]!=0 or closed[neighbor_node]:
+					continue
+				closed[neighbor_node] = True
 				to_fill_put(neighbor_node)
 
 		return labels
@@ -153,8 +183,11 @@ class FlowRouterOverFlat(Component):
 		high_put = high_edges.put
 		high_get = high_edges.get
 		high_qsize = high_edges.qsize
-		high_put(MARKER)
 
+		closed = np.zeros(self._n, dtype=bool)
+		closed[high_edges.queue] = True
+
+		high_put(MARKER)
 		while high_qsize()>1:
 			node = high_get()
 
@@ -175,9 +208,10 @@ class FlowRouterOverFlat(Component):
 					continue
 				if flat_mask[neighbor_node]>0:
 					continue
-				if neighbor_node in high_edges.queue:
+				if closed[neighbor_node]:
 					continue
 				if labels[neighbor_node]==labels[node] and self._flow_receiver[neighbor_node]==neighbor_node:
+					closed[neighbor_node] = True
 					high_put(neighbor_node)
 
 		return flat_mask, flat_height
@@ -191,8 +225,12 @@ class FlowRouterOverFlat(Component):
 		low_put = low_edges.put
 		low_get = low_edges.get
 		low_qsize = low_edges.qsize
-		low_put(MARKER)
+		low_queue = low_edges.queue
 
+		closed = np.zeros(self._n, dtype=bool)
+		closed[low_edges.queue] = True
+
+		low_put(MARKER)
 		while low_qsize()>1:
 			node = low_get()
 
@@ -215,9 +253,10 @@ class FlowRouterOverFlat(Component):
 					continue
 				if flat_mask[neighbor_node]>0:
 					continue
-				if neighbor_node in low_edges.queue:
+				if closed[neighbor_node]:
 					continue
 				if labels[neighbor_node]==labels[node] and self._flow_receiver[neighbor_node]==neighbor_node:
+					closed[neighbor_node] = True
 					low_put(neighbor_node)
 
 		return flat_mask, flat_height
