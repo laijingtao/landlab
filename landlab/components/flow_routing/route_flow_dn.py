@@ -156,6 +156,9 @@ class FlowRouter(Component):
         self.upstream_ordered_nodes = model_grid.create_node_array_zeros('upstream_node_order')
         self.links_to_receiver = model_grid.create_node_array_zeros('links_to_flow_receiver')
 
+        #JL Nov 2015. Add flow routing over flat
+        self._fr_over_flat = FlowRouterOverFlat(self._grid)
+
 
     def route_flow(self, method='D8', routing_flat=False):
         """
@@ -266,14 +269,13 @@ class FlowRouter(Component):
 
         #print 'sinks:', sink
 
-        
+
         #JL Nov 2015. Add flow routing over flat
         if routing_flat:
-            fr_over_flat = FlowRouterOverFlat(self._grid)
-            receiver = fr_over_flat.route_flow(receiver)
+            receiver = self._fr_over_flat.route_flow(receiver)
             node_id = numpy.arange(self._grid.number_of_nodes)
             (sink, ) = numpy.where(node_id==receiver)
-        
+
 
         # Calculate drainage area, discharge, and ...
         a, q, s = flow_accum_bw.flow_accumulation(receiver, sink,

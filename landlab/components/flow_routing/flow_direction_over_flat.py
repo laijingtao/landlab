@@ -27,8 +27,27 @@ class FlowRouterOverFlat(Component):
 		(self._open_boundary, ) = np.where(np.logical_or(self._grid.status_at_node==1, self._grid.status_at_node==2))
 		(self._close_boundary, ) = np.where(self._grid.status_at_node==4)
 
-		self._neighbors = np.concatenate((self._grid.neighbors_at_node, self._grid.diagonals_at_node), axis=1)
-		self._neighbors[self._neighbors == BAD_INDEX_VALUE] = -1
+		#self._neighbors = np.concatenate((self._grid.neighbors_at_node, self._grid.diagonals_at_node), axis=1)
+		#self._neighbors[self._neighbors == BAD_INDEX_VALUE] = -1
+		self._build_neighbors_list()
+
+
+	def _build_neighbors_list(self):
+
+		(nrows, ncols) = self._grid.shape
+		neighbor_dR = np.array([0, 0, 1, -1, 1, 1, -1, -1])
+		neighbor_dC = np.array([1, -1, 0, 0, 1, -1, 1, -1])
+		self._neighbors = np.zeros(shape=(self._n, 8), dtype=int)
+		self._neighbors[self._neighbors==0] = -1
+		for node in range(self._n):
+			r = self._grid.node_y[node]/self._grid.dx
+			c = self._grid.node_x[node]/self._grid.dx
+			for i in range(8):
+				neighbor_r = r+neighbor_dR[i]
+				neighbor_c = c+neighbor_dC[i]
+				if neighbor_r<0 or neighbor_c<0 or neighbor_r>=nrows or neighbor_c>=ncols:
+					continue
+				self._neighbors[node][i] = neighbor_r*ncols+neighbor_c
 
 
 	def route_flow(self, receiver, dem='topographic__elevation'):
@@ -290,15 +309,14 @@ class FlowRouterOverFlat(Component):
 	def _flow_dirs_over_flat_d8(self, flat_mask, labels):
 
 		for node in range(self._n):
-			if node in self._boundary:
-				continue
 			if self._flow_receiver[node]!=node:
 				continue
-			"""
+			if node in self._boundary:
+				continue
+
 			min_elev = flat_mask[node]
 			receiver = node
-			for i in range(8):
-				neighbor_node = self._neighbors[node][i]
+			for neighbor_node in self._neighbors[node]:
 				if neighbor_node==-1:
 					continue
 				if labels[neighbor_node]!=labels[node]:
@@ -311,5 +329,5 @@ class FlowRouterOverFlat(Component):
 			potential_receiver = potential_receiver[np.where(potential_receiver!=-1)]
 			potential_receiver = potential_receiver[np.where(labels[potential_receiver]==labels[node])]
 			receiver = potential_receiver[np.argmin(flat_mask[potential_receiver])]
-
+			"""
 			self._flow_receiver[node] = receiver
