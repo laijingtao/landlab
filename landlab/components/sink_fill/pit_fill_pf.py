@@ -17,7 +17,6 @@ class PitFiller(Component):
     def __init__(self, input_grid):
 
         self._grid = input_grid
-        self._dem = self._grid.at_node['topographic__elevation'].copy()
         self._n = self._grid.number_of_nodes
         (self._boundary, ) = np.where(self._grid.status_at_node!=0)
         (self._open_boundary, ) = np.where(np.logical_or(self._grid.status_at_node==1, self._grid.status_at_node==2))
@@ -47,6 +46,8 @@ class PitFiller(Component):
 
     def pit_fill(self):
 
+        dem = self._grid.at_node['topographic__elevation'].copy()
+        neighbors = self._neighbors
         closed = np.zeros(self._n, dtype=bool)
         raised_node = Queue.Queue(maxsize=self._n)
         priority_queue = Queue.PriorityQueue(maxsize=self._n)
@@ -59,7 +60,7 @@ class PitFiller(Component):
         priority_empty = priority_queue.empty
 
         for i in self._open_boundary:
-            priority_put((self._dem[i], i))
+            priority_put((dem[i], i))
             closed[i] = True
         for i in self._close_boundary:
             closed[i] = True
@@ -69,17 +70,17 @@ class PitFiller(Component):
                 node = raised_get()
             else:
                 elev, node = priority_get()
-            for neighbor_node in self._neighbors[node]:
+            for neighbor_node in neighbors[node]:
                 if neighbor_node==-1:
                     continue
                 if closed[neighbor_node]:
                     continue
                 closed[neighbor_node] = True
-                if self._dem[neighbor_node]<=self._dem[node]:
-                    self._dem[neighbor_node] = self._dem[node]
+                if dem[neighbor_node]<=dem[node]:
+                    dem[neighbor_node] = dem[node]
                     raised_put(neighbor_node)
                 else:
-                    priority_put((self._dem[neighbor_node], neighbor_node))
+                    priority_put((dem[neighbor_node], neighbor_node))
 
-        self._grid.at_node['topographic__elevation'] = self._dem
+        self._grid.at_node['topographic__elevation'] = dem
         return self._grid
