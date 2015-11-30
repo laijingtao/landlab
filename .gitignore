@@ -80,3 +80,4 @@ installfiles.txt
 *.c
 
 landlab/io/mysave.grid
+landlab/components/flow_routing/route_flow_dn.py
