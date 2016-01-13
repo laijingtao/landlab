@@ -100,7 +100,7 @@ class StreamPowerEroder(object):
         try:
             self.sp_crit = inputs.read_float('threshold_sp')
             self.set_threshold = True #flag for sed_flux_dep_incision to see if the threshold was manually set.
-            print("Found a threshold to use: ", self.sp_crit)
+            # print("Found a threshold to use: ", self.sp_crit)
         except MissingKeyError:
             self.sp_crit = 0.
             self.set_threshold = False
@@ -283,7 +283,7 @@ class StreamPowerEroder(object):
                     #This isn't ideal. It should probably just be the outs...
                     #i.e., np.max(self.link_S_with_trailing_blank[grid.node_outlinks] AND -self.link_S_with_trailing_blank[grid.node_inlinks])
                     self.link_S_with_trailing_blank[:-1] = S_links
-                    self.slopes = np.amax(np.fabs(self.link_S_with_trailing_blank[grid.node_links]),axis=0)
+                    self.slopes = np.amax(np.fabs(self.link_S_with_trailing_blank[grid.links_at_node.T]),axis=0)
 
         if type(node_drainage_areas)==str:
             node_A = grid.at_node[node_drainage_areas]
