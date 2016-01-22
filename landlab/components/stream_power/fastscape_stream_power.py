@@ -217,4 +217,3 @@ class FastscapeEroder(object):
         #self.grid['node'][self.value_field] = z
 
         return self.grid
-
