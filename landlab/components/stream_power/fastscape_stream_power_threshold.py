@@ -126,7 +126,7 @@ class FastscapeEroder(object):
         return self.dt, self.r_i
 
 
-    def erode(self, grid_in, dt=None, K_if_used=None, flooded_nodes=None):
+    def erode(self, grid_in, dt=None, K_if_used=None, flooded_nodes=None, threshold_power=0.):
         """
         This method implements the stream power erosion, following the Braun-
         Willett (2013) implicit Fastscape algorithm. This should allow it to
@@ -138,7 +138,7 @@ class FastscapeEroder(object):
 
         It returns the grid, in which it will have modified the value of
         *value_field*, as specified in component initialization.
-        
+
         Parameters
         ----------
         grid_in : Landlab ModelGrid object
@@ -195,7 +195,7 @@ class FastscapeEroder(object):
             reversed_flow = z < z[flow_receivers]
             # this check necessary if flow has been routed across depressions
             alpha[reversed_flow] = 0.
-            
+
         method = 'cython'
 
         if self.nonlinear_flag == False: #n==1
