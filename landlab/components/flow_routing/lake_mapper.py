@@ -696,7 +696,7 @@ class DepressionFinderAndRouter(Component):
             outlet_neighbors[inlake] = -1
             unique_outs, unique_indxs = np.unique(outlet_neighbors,
                                                   return_index=True)
-                
+
             """
             #BUG!! out_draining include BAD_INDEX_VALUE.  (JL Nov 2015)
             i = len(unique_outs)-1
@@ -772,7 +772,7 @@ class DepressionFinderAndRouter(Component):
         Nodes not in a lake are labelled with BAD_INDEX_VALUE.
         """
         return self._lake_map
-    
+
     @property
     def lake_at_node(self):
         """
