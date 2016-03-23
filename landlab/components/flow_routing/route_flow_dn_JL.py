@@ -10,6 +10,7 @@ for a grid in which a node has N neighbors (N might happen to be 8, or not).
 """
 # Created GT Nov 2013
 # Modified to save data to grid directly, DEJH March 2014
+# MOdified to add flow routing over flat, JL March 2016
 
 from __future__ import print_function
 
