@@ -77,7 +77,7 @@ class FlowRouterOverFlat(Component):
 	def _resolve_flats(self):
 
 		is_flat = np.zeros(self._n, dtype=bool)
-		node_id = np.arange(self._n)
+		node_id = np.arange(self._n, dtype=int)
 		(sink, ) = np.where(node_id==self._flow_receiver)
 		for node in sink:
 			if node in self._close_boundary:
