@@ -90,7 +90,7 @@ class FlowRouterOverFlat(Component):
 
         labels = np.zeros(self._n, dtype='int')
         labelid = 1
-        for node in low_edges.queue:
+        for node in low_edges:
             if labels[node]==0:
                 labels = self._label_flats(labels, node, labelid)
                 labelid += 1
