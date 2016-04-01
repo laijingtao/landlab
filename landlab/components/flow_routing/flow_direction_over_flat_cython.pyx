@@ -12,6 +12,11 @@ ctypedef np.int_t DTYPE_INT_t
 
 cdef class FlowRouterOverFlat_Cy:
 
+    cdef int _n
+    cdef double[:] _dem
+    cdef int[:] _flow_receiver, _boundary, _close_boundary, _open_boundary
+    cdef int[:, :] _neighbors
+
     def __init__(self, np.ndarray[DTYPE_FLOAT_t, ndim=1] dem,
                  np.ndarray[DTYPE_INT_t, ndim=1] receiver,
                  np.ndarray[DTYPE_INT_t, ndim=1] bdry,
@@ -28,32 +33,38 @@ cdef class FlowRouterOverFlat_Cy:
         self._neighbors = neighbors
 
 
-    def route_flow(self):
-
+    cdef np.ndarray route_flow(self):
+        
+        cdef np.ndarray[DTYPE_INT_t, ndim=1] flow_receiver = np.asarray(self._flow_receiver)
+        
         flat_mask, labels = self._resolve_flats()
-        receiver = self._flow_dirs_over_flat_d8(self._flow_receiver, flat_mask, labels)
+        flow_receiver = self._flow_dirs_over_flat_d8(flow_receiver, flat_mask, labels)
 
-        return receiver
+        return flow_receiver
 
 
-    def _resolve_flats(self):
+    cdef _resolve_flats(self):
+
+        cdef int i
+        cdef np.ndarray[DTYPE_INT_t, ndim=1] flow_receiver = np.asarray(self._flow_receiver)
+        cdef np.ndarray[DTYPE_INT_t, ndim=1] close_boundary = np.asarray(self._close_boundary)
 
         cdef np.ndarray is_flat = np.zeros(self._n, dtype=DTYPE_INT)
         cdef np.ndarray node_id = np.arange(self._n, dtype=DTYPE_INT)
         cdef DTYPE_INT_t node
 
-        (temp, ) = np.where(node_id==self._flow_receiver)
+        (temp, ) = np.where(node_id==flow_receiver)
         cdef np.ndarray sink = np.zeros(len(temp), dtype=DTYPE_INT)
-        cdef int i
         for i in range(len(temp)):
             sink[i] = temp[i]
 
         for node in sink:
-            if node in self._close_boundary:
+            if node in close_boundary:
                 continue
             if not(is_flat[node]):
                 is_flat = self._identify_flats(is_flat, node)
 
+        cdef deque[int] high_edges, low_edges
         high_edges, low_edges = self._flat_edges(is_flat)
 
         cdef np.ndarray labels = np.zeros(self._n, dtype=DTYPE_INT)
@@ -73,20 +84,19 @@ cdef class FlowRouterOverFlat_Cy:
         return flat_mask, labels
 
 
-    def _identify_flats(self, np.ndarray[DTYPE_INT_t, ndim=1] is_flat, DTYPE_INT_t k):
+    cdef np.ndarray _identify_flats(self, np.ndarray[DTYPE_INT_t, ndim=1] is_flat, int node):
 
-        cdef np.ndarray flow_receiver = self._flow_receiver
-        cdef np.ndarray neighbors = self._neighbors
-        cdef np.ndarray boundary = self._boundary
-        cdef np.ndarray dem = self._dem
+        cdef np.ndarray flow_receiver = np.asarray(self._flow_receiver)
+        cdef np.ndarray neighbors = np.asarray(self._neighbors)
+        cdef np.ndarray boundary = np.asarray(self._boundary)
+        cdef np.ndarray dem = np.asarray(self._dem)
 
         cdef deque[int] to_fill
         cdef np.ndarray closed = np.zeros(self._n, dtype=DTYPE_INT)
-        cdef DTYPE_INT_t node = k
 
         closed[node] = 1
         to_fill.push_back(node)
-        cdef DTYPE_INT_t elev = dem[node]
+        cdef DTYPE_FLOAT_t elev = dem[node]
         while not(to_fill.size()==0):
             node = to_fill.front()
             to_fill.pop_front()
@@ -109,18 +119,18 @@ cdef class FlowRouterOverFlat_Cy:
         return is_flat
 
 
-    def _flat_edges(self, np.ndarray[DTYPE_INT_t, ndim=1] is_flat):
+    cdef (deque[int], deque[int]) _flat_edges(self, np.ndarray[DTYPE_INT_t, ndim=1] is_flat):
 
-        cdef np.ndarray flow_receiver = self._flow_receiver
-        cdef np.ndarray neighbors = self._neighbors
-        cdef np.ndarray boundary = self._boundary
-        cdef np.ndarray open_boundary = self._open_boundary
-        cdef np.ndarray close_boundary = self._close_boundary
-        cdef np.ndarray dem = self._dem
+        cdef np.ndarray flow_receiver = np.asarray(self._flow_receiver)
+        cdef np.ndarray neighbors = np.asarray(self._neighbors)
+        cdef np.ndarray boundary = np.asarray(self._boundary)
+        cdef np.ndarray open_boundary = np.asarray(self._open_boundary)
+        cdef np.ndarray close_boundary = np.asarray(self._close_boundary)
+        cdef np.ndarray dem = np.asarray(self._dem)
 
         cdef deque[int] low_edges
         cdef deque[int] high_edges
-        cdef DTYPE_INT_t node
+        cdef int node
 
         for node in range(self._n):
             if node in boundary:
@@ -146,19 +156,19 @@ cdef class FlowRouterOverFlat_Cy:
         return high_edges, low_edges
 
 
-    def _label_flats(self, np.ndarray[DTYPE_INT_t, ndim=1] labels, DTYPE_INT_t node, int labelid):
+    cdef np.ndarray _label_flats(self, np.ndarray[DTYPE_INT_t, ndim=1] labels, int node, int labelid):
 
-        cdef np.ndarray flow_receiver = self._flow_receiver
-        cdef np.ndarray neighbors = self._neighbors
-        cdef np.ndarray boundary = self._boundary
-        cdef np.ndarray dem = self._dem
+        cdef np.ndarray flow_receiver = np.asarray(self._flow_receiver)
+        cdef np.ndarray neighbors = np.asarray(self._neighbors)
+        cdef np.ndarray boundary = np.asarray(self._boundary)
+        cdef np.ndarray dem = np.asarray(self._dem)
 
         cdef deque[int] to_fill
 
         cdef np.ndarray closed = np.zeros(self._n, dtype=DTYPE_INT)
         closed[node] = 1
         to_fill.push_back(node)
-        cdef DTYPE_INT_t elev = dem[node]
+        cdef DTYPE_FLOAT_t elev = dem[node]
         while not(to_fill.size()==0):
             node = to_fill.front()
             to_fill.pop_front()
@@ -180,22 +190,24 @@ cdef class FlowRouterOverFlat_Cy:
         return labels
 
 
-    def _away_from_higher(self, np.ndarray[DTYPE_FLOAT_t, ndim=1] flat_mask,
+    cdef _away_from_higher(self, np.ndarray[DTYPE_FLOAT_t, ndim=1] flat_mask,
                           np.ndarray[DTYPE_INT_t, ndim=1] labels,
                           np.ndarray[DTYPE_FLOAT_t, ndim=1] flat_height,
-                          deque high_edges):
+                          deque[int] high_edges):
 
-        cdef np.ndarray flow_receiver = self._flow_receiver
-        cdef np.ndarray neighbors = self._neighbors
-        cdef np.ndarray boundary = self._boundary
+        cdef np.ndarray flow_receiver = np.asarray(self._flow_receiver)
+        cdef np.ndarray neighbors = np.asarray(self._neighbors)
+        cdef np.ndarray boundary = np.asarray(self._boundary)
         cdef int k = 1
         cdef int MARKER = -100
-        cdef DTYPE_INT_t node
+        cdef int node
 
         cdef np.ndarray closed = np.zeros(self._n, dtype=DTYPE_INT)
         cdef int i
+        cdef int tempn
         for i in range(high_edges.size()):
-            closed[high_edges.at(i)] = 1
+            tempn = high_edges.at(i)
+            closed[tempn] = 1
 
         high_edges.push_back(MARKER)
         while high_edges.size()>1:
@@ -229,24 +241,26 @@ cdef class FlowRouterOverFlat_Cy:
         return flat_mask, flat_height
 
 
-    def _towards_lower(self, np.ndarray[DTYPE_FLOAT_t, ndim=1] flat_mask,
+    cdef _towards_lower(self, np.ndarray[DTYPE_FLOAT_t, ndim=1] flat_mask,
                        np.ndarray[DTYPE_INT_t, ndim=1] labels,
                        np.ndarray[DTYPE_FLOAT_t, ndim=1] flat_height,
-                       deque low_edges):
+                       deque[int] low_edges):
 
-        cdef np.ndarray flow_receiver = self._flow_receiver
-        cdef np.ndarray neighbors = self._neighbors
-        cdef np.ndarray boundary = self._boundary
+        cdef np.ndarray flow_receiver = np.asarray(self._flow_receiver)
+        cdef np.ndarray neighbors = np.asarray(self._neighbors)
+        cdef np.ndarray boundary = np.asarray(self._boundary)
         cdef int k = 1
         cdef int MARKER = -100
-        cdef DTYPE_INT_t node
+        cdef int node
 
         flat_mask = 0-flat_mask
 
         cdef np.ndarray closed = np.zeros(self._n, dtype=DTYPE_INT)
         cdef int i
+        cdef int tempn
         for i in range(low_edges.size()):
-            closed[low_edges.at(i)] = 1
+            tempn = low_edges.at(i)
+            closed[tempn] = 1
 
         low_edges.push_back(MARKER)
         while low_edges.size()>1:
@@ -282,12 +296,12 @@ cdef class FlowRouterOverFlat_Cy:
         return flat_mask, flat_height
 
 
-    def _flow_dirs_over_flat_d8(self, np.ndarray[DTYPE_INT_t, ndim=1] flow_receiver,
+    cdef np.ndarray _flow_dirs_over_flat_d8(self, np.ndarray[DTYPE_INT_t, ndim=1] flow_receiver,
                                 np.ndarray[DTYPE_FLOAT_t, ndim=1] flat_mask,
                                 np.ndarray[DTYPE_INT_t, ndim=1] labels):
 
-        cdef np.ndarray neighbors = self._neighbors
-        cdef np.ndarray boundary = self._boundary
+        cdef np.ndarray neighbors = np.asarray(self._neighbors)
+        cdef np.ndarray boundary = np.asarray(self._boundary)
 
         for node in range(self._n):
             if flow_receiver[node]!=node:

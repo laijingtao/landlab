@@ -62,10 +62,15 @@ class FlowRouterOverFlat(Component):
         """
         self._flow_receiver = receiver
         #(self._flow_receiver, ss) = grid_flow_directions(self._grid, self._dem)
-
-        flat_mask, labels = self._resolve_flats()
-        #pdb.set_trace()
-        self._flow_receiver = self._flow_dirs_over_flat_d8(flat_mask, labels)
+        
+        method = 'cython'
+        if method=='cython':
+            from flow_direction_over_flat_cython import adjust_flow_direction
+            self._flow_receiver = adjust_flow_direction(self._dem, self._flow_receiver, self._boundary, \
+                                                        self._close_boundary, self._open_boundary, self._neighbors)
+        else:
+            flat_mask, labels = self._resolve_flats()
+            self._flow_receiver = self._flow_dirs_over_flat_d8(flat_mask, labels)
 
 
         #a, q, s = flow_accum_bw.flow_accumulation(self._flow_receiver, self._open_boundary, node_cell_area=self._grid.forced_cell_areas)
