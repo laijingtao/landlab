@@ -24,7 +24,7 @@ cdef class FlowRouterOverFlat_Cy:
                  np.ndarray[DTYPE_INT_t, ndim=1] c_bdry,
                  np.ndarray[DTYPE_INT_t, ndim=1] o_bdry,
                  np.ndarray[DTYPE_INT_t, ndim=2] neighbors):
-        start_time = time.time()
+
         self._n = len(dem)
         self._dem = dem
         self._flow_receiver = receiver
@@ -32,7 +32,6 @@ cdef class FlowRouterOverFlat_Cy:
         self._close_boundary = c_bdry
         self._open_boundary = o_bdry
         self._neighbors = neighbors
-        print "__init__", time.time()-start_time
 
 
     cdef np.ndarray route_flow(self):
@@ -60,38 +59,38 @@ cdef class FlowRouterOverFlat_Cy:
         for i in range(len(temp)):
             sink[i] = temp[i]
 
-        start_time = time.time()
+        #start_time = time.time()
         for node in sink:
             if node in close_boundary:
                 continue
             if not(is_flat[node]):
-                is_flat = self._identify_flats(is_flat, node)
-        print '_identify_flats', time.time()-start_time
+                self._identify_flats(is_flat, node)
+        #print '_identify_flats', time.time()-start_time
 
-        start_time = time.time()
+        #start_time = time.time()
         cdef deque[int] high_edges, low_edges
         high_edges, low_edges = self._flat_edges(is_flat)
-        print '_flat_edges', time.time()-start_time
+        #print '_flat_edges', time.time()-start_time
 
-        start_time = time.time()
+        #start_time = time.time()
         cdef np.ndarray[DTYPE_INT_t, ndim=1] labels = np.zeros(self._n, dtype=DTYPE_INT)
         cdef int labelid = 1
         for i in range(low_edges.size()):
             node = low_edges.at(i)
             if labels[node]==0:
-                labels = self._label_flats(labels, node, labelid)
+                self._label_flats(labels, node, labelid)
                 labelid += 1
-        print '_label_flats', time.time()-start_time
+        #print '_label_flats', time.time()-start_time
 
         cdef np.ndarray[DTYPE_FLOAT_t, ndim=1] flat_mask = np.zeros(self._n, dtype=DTYPE_FLOAT)
         cdef np.ndarray[DTYPE_FLOAT_t, ndim=1] flat_height = np.zeros(labelid, dtype=DTYPE_FLOAT)
         #this part is bottleneck
-        start_time = time.time()
+        #start_time = time.time()
         self._away_from_higher(flat_mask, labels, flat_height, high_edges)
-        print '_away_from_higher', time.time()-start_time
-        start_time = time.time()
+        #print '_away_from_higher', time.time()-start_time
+        #start_time = time.time()
         self._towards_lower(flat_mask, labels, flat_height, low_edges)
-        print '_towards_lower', time.time()-start_time
+        #print '_towards_lower', time.time()-start_time
 
         return flat_mask, labels
 

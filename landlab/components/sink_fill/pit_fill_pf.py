@@ -69,7 +69,7 @@ class PitFiller(Component):
             if not(raised_node.empty()):
                 node = raised_get()
             else:
-                elev, node = priority_get()
+                elev, node = priority_get()            
             for neighbor_node in neighbors[node]:
                 if neighbor_node==-1:
                     continue
