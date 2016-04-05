@@ -15,7 +15,6 @@ from landlab import Component, FieldError
 from landlab.grid.base import BAD_INDEX_VALUE
 
 from landlab.components.flow_routing.flow_direction_DN import grid_flow_directions
-from flow_direction_over_flat_cython import adjust_flow_direction
 
 
 class FlowRouterOverFlat(Component):
@@ -66,6 +65,7 @@ class FlowRouterOverFlat(Component):
 
         method = 'python'
         if method=='cython':
+            from flow_direction_over_flat_cython import adjust_flow_direction
             self._flow_receiver = adjust_flow_direction(self._dem, np.intc(self._flow_receiver),
                                                         np.intc(self._boundary), np.intc(self._close_boundary),
                                                         np.intc(self._open_boundary), np.intc(self._neighbors))
