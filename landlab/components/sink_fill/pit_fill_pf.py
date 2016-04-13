@@ -49,6 +49,7 @@ class PitFiller(Component):
         dem = self._grid.at_node['topographic__elevation'].copy()
         neighbors = self._neighbors
         closed = np.zeros(self._n, dtype=bool)
+        depressions = np.zeros(self._n, dtype=bool)
         raised_node = Queue.Queue(maxsize=self._n)
         priority_queue = Queue.PriorityQueue(maxsize=self._n)
 
@@ -69,7 +70,7 @@ class PitFiller(Component):
             if not(raised_node.empty()):
                 node = raised_get()
             else:
-                elev, node = priority_get()            
+                elev, node = priority_get()
             for neighbor_node in neighbors[node]:
                 if neighbor_node==-1:
                     continue
@@ -78,9 +79,11 @@ class PitFiller(Component):
                 closed[neighbor_node] = True
                 if dem[neighbor_node]<=dem[node]:
                     dem[neighbor_node] = dem[node]
+                    depressions[neighbor_node] = True
                     raised_put(neighbor_node)
                 else:
                     priority_put((dem[neighbor_node], neighbor_node))
 
         self._grid.at_node['topographic__elevation'] = dem
+        self._grid.at_node['depressions'] = depressions
         return self._grid
