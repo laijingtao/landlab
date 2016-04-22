@@ -47,6 +47,7 @@ class WaterTableSolver(Component):
             fixed_flux = self._grid.at_node['groundwater_flux_fixed']
 
         active, = np.where(np.logical_and(fixed_depth==False, fixed_flux==False))
+        fixed_flux_index, = np.where(fixed_flux==True)
         random_seed = np.random.randint(h.min(), h.max(), len(h))
         h[active] = random_seed[active]
         #relax_factor = 4/(2+np.sqrt(4-(np.cos(3.1415/(self._grid.shape[0]-1))+np.cos(3.1415/(self._grid.shape[1]-1)))**2))
@@ -59,6 +60,7 @@ class WaterTableSolver(Component):
             #h[active] = (h[self._neighbors[active, 0]]+h[self._neighbors[active, 1]]+\
             #             h[self._neighbors[active, 2]]+h[self._neighbors[active, 3]])/4
             h[active] = np.sum(h[self._neighbors[active]], axis=1)/4
+            #h[fixed_flux_index] = h[np.where(self._grid.node_x==1.*self._grid.dx)]-self._grid.at_node['groundwater_flux'][fixed_flux_index]*self._grid.dx/5.
             if np.nanmax(np.absolute((h-h_old)/h_old))<tolerance:
                 flag = True
                 break
