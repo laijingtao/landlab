@@ -138,7 +138,7 @@ class LinearDiffuser(Component):
         # as of modern componentization (Spring '16), this can take arrays
         # and irregular grids
         if type(self.kd) not in (int, float):
-            assert len(self.kd) is self.grid.number_of_nodes, self.kd
+            assert len(self.kd) == self.grid.number_of_nodes, self.kd
             kd_links = self.grid.map_max_of_link_nodes_to_link(self.kd)
         else:
             kd_links = float(self.kd)
@@ -153,19 +153,19 @@ class LinearDiffuser(Component):
         self.interior_cells = self.grid.node_at_core_cell
 
         self.z = self.grid.at_node[self.values_to_diffuse]
-        g = self.grid.zeros(centering='link')
-        qs = self.grid.zeros(centering='link')
+        g = self.grid.zeros(at='link')
+        qs = self.grid.zeros(at='link')
         try:
             self.g = self.grid.add_field('link', 'topographic__gradient', g,
                                          noclobber=True)
             # ^note this will object if this exists already
         except FieldError:
-            pass  # field exists, so no problem
+            self.g = self.grid.at_link['topographic__gradient'] # keep a ref
         try:
             self.qs = self.grid.add_field('link', 'unit_flux', qs,
                                           noclobber=True)
         except FieldError:
-            pass
+            self.qs = self.grid.at_link['unit_flux']
         # note all these terms are deliberately loose, as we won't always be
         # dealing with topo
 
