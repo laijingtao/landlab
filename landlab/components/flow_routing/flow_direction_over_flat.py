@@ -160,27 +160,7 @@ class FlowRouterOverFlat(Component):
                     continue
                 closed[neighbor_node] = True
                 to_fill_put(neighbor_node)
-            '''
-            neighbor_node = neighbors[node]
-            neighbor_node = neighbor_node[np.where(neighbor_node!=-1)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(np.logical_not(np.in1d(neighbor_node, boundary)))]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(dem[neighbor_node]==elev)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(is_flat[neighbor_node]==False)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(closed[neighbor_node]==False)]
-            if len(neighbor_node)==0:
-                continue
-            for i in neighbor_node:
-                closed[i] = True
-                to_fill_put(i)
-            '''
+
         return is_flat
 
 
@@ -266,27 +246,7 @@ class FlowRouterOverFlat(Component):
                     continue
                 closed[neighbor_node] = True
                 to_fill_put(neighbor_node)
-            '''
-            neighbor_node = neighbors[node]
-            neighbor_node = neighbor_node[np.where(neighbor_node!=-1)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(np.logical_not(np.in1d(neighbor_node, boundary)))]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(dem[neighbor_node]==elev)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(labels[neighbor_node]==0)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(closed[neighbor_node]==False)]
-            if len(neighbor_node)==0:
-                continue
-            for i in neighbor_node:
-                closed[i] = True
-                to_fill_put(i)
-            '''
+
         return labels
 
 
@@ -339,27 +299,7 @@ class FlowRouterOverFlat(Component):
                 if labels[neighbor_node]==labels[node] and flow_receiver[neighbor_node]==neighbor_node:
                     closed[neighbor_node] = True
                     high_put(neighbor_node)
-            '''
-            neighbor_node = neighbors[node]
-            neighbor_node = neighbor_node[np.where(neighbor_node!=-1)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(np.logical_not(np.in1d(neighbor_node, boundary)))]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(flat_mask[neighbor_node]<=0)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(closed[neighbor_node]==False)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(np.logical_and(labels[neighbor_node]==labels[node], flow_receiver[neighbor_node]==neighbor_node))]
-            if len(neighbor_node)==0:
-                continue
-            for i in neighbor_node:
-                closed[i] = True
-                high_put(i)
-            '''
+
         return flat_mask, flat_height
 
 
@@ -415,27 +355,7 @@ class FlowRouterOverFlat(Component):
                 if labels[neighbor_node]==labels[node] and flow_receiver[neighbor_node]==neighbor_node:
                     closed[neighbor_node] = True
                     low_put(neighbor_node)
-            '''
-            neighbor_node = neighbors[node]
-            neighbor_node = neighbor_node[np.where(neighbor_node!=-1)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(np.logical_not(np.in1d(neighbor_node, boundary)))]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(flat_mask[neighbor_node]<=0)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(closed[neighbor_node]==False)]
-            if len(neighbor_node)==0:
-                continue
-            neighbor_node = neighbor_node[np.where(np.logical_and(labels[neighbor_node]==labels[node], flow_receiver[neighbor_node]==neighbor_node))]
-            if len(neighbor_node)==0:
-                continue
-            for i in neighbor_node:
-                closed[i] = True
-                low_put(i)
-            '''
+            
         return flat_mask, flat_height
 
 
