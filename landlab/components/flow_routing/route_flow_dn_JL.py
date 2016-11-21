@@ -338,6 +338,28 @@ class FlowRouter(Component):
             receiver = self._fr_over_flat.route_flow(receiver)
             node_id = numpy.arange(self._grid.number_of_nodes)
             (sink, ) = numpy.where(node_id==receiver)
+            '''
+            #update steepest_slope
+            steepest_slope = numpy.zeros(len(elevs), dtype = numpy.float)
+            for node in range(self._grid.number_of_nodes):
+                f = node
+                t = receiver[node]
+                dists = numpy.sqrt(numpy.absolute(self._grid.node_x[f]-self._grid.node_x[t])**2 + \
+                        numpy.absolute(self._grid.node_y[f]-self._grid.node_y[t])**2)
+                steepest_slope[node] = (elevs[f]-elevs[t])/dists
+            '''
+            '''
+            #update recvr_link
+            recvr_link = -1 + numpy.zeros(len(elevs), dtype=numpy.int)
+            fromnode = self._activelink_from
+            tonode = self._activelink_to
+            active_links = self._active_links
+            for link_id in range(len(fromnode)):
+                f = fromnode[link_id]
+                t = tonode[link_id]
+                if receiver[f] == t:
+                    recvr_link[f] = active_links[link_id]
+            '''
 
         # Calculate drainage area, discharge, and ...
         a, q, s = flow_accum_bw.flow_accumulation(

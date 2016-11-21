@@ -46,7 +46,7 @@ class PitFiller(Component):
 
     def pit_fill(self):
 
-        dem = self._grid.at_node['topographic__elevation'].copy()
+        dem = self._grid.at_node['topographic__elevation']
         neighbors = self._neighbors
         closed = np.zeros(self._n, dtype=bool)
         depressions = np.zeros(self._n, dtype=bool)
@@ -85,5 +85,5 @@ class PitFiller(Component):
                     priority_put((dem[neighbor_node], neighbor_node))
 
         self._grid.at_node['topographic__elevation'] = dem
-        self._grid.at_node['depressions'] = depressions
+        self._grid.at_node['topographic__depressions'] = depressions
         return self._grid
