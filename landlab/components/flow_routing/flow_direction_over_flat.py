@@ -2,7 +2,7 @@
 flow_direction_over_flat.py
 Implementation of Barnes et al.(2014)
 
-Created by JL, Oct 2015
+Created by J. Lai at UIUC (Nov 2015)
 """
 
 import numpy as np
@@ -18,6 +18,78 @@ from landlab.components.flow_routing.flow_direction_DN import grid_flow_directio
 
 
 class FlowRouterOverFlat(Component):
+    """
+    This class calculates the flow direction across topography with flats
+    created by the PitFiller module. This approach is presented by 
+    Barnes et al. (2014), and it operates by calculating a gradient away
+    from higher edges of depressions as well as a gradient towards lower
+    edges of depressions, resulting in a convergent flow field without
+    changing the actual topography.
+
+    The primary function of this class is :func:`route_flow`.
+
+    Construction:
+
+        PitFiller(grid)
+
+    Parameters
+    ----------
+    grid : RasterModelGrid
+        A grid.
+
+    Returns
+    -------
+    receiver : 
+        Node array of receivers (node that receives flow from current node)
+
+
+    Examples
+    --------
+    This class is working together with 
+    :func:`landlab.components.flow_routing.route_flow_dn_JL.FlowRouter.route_flow`.
+    It is turned on/off by setting the value of 'routing_flat' in the FlowRouter
+    module.
+
+    Note: the standand landlab FlowRouter in route_flow_dn.py does not support 
+    flow routing over flat. Users should use the FlowRouter in route_flow_dn_JL.py.
+
+    >>> import numpy as np
+    >>> from landlab import RasterModelGrid
+    >>> from landlab.components.flow_routing.route_flow_dn_JL import FlowRouter
+    >>> mg = RasterModelGrid((5, 5), spacing=(1, 1))
+    >>> elev = np.array([0.,  0.,  0.,  0.,
+    ...                  0.,  0.,  0.,  0.,
+    ...                  0.,  0.,  0.,  0.,
+    ...                  0.,  0.,  0.,  0.,
+    ...                  0.,  0.,  0.,  0.])
+    >>> _ = mg.add_field('node','topographic__elevation', elev)
+    >>> mg.set_closed_boundaries_at_grid_edges(True, True, True, False)
+    >>> fr = FlowRouter(mg, routing_flow=True)
+    >>> mg = fr.route_flow()
+    
+    """
+
+    _name = 'FlowRouterOverFlat'
+
+    _input_var_names = (
+        'topographic__elevation'
+    )
+
+    _output_var_names = (
+        'topographic__elevation',
+    )
+
+    _var_units = {
+        'topographic__elevation': 'm',
+    }
+
+    _var_mapping = {
+        'topographic__elevation': 'node',
+    }
+
+    _var_doc = {
+        'topographic__elevation': 'Land surface topographic elevation',
+    }
 
     def __init__(self, input_grid):
 
@@ -28,8 +100,6 @@ class FlowRouterOverFlat(Component):
         (self._open_boundary, ) = np.where(np.logical_or(self._grid.status_at_node==1, self._grid.status_at_node==2))
         (self._close_boundary, ) = np.where(self._grid.status_at_node==4)
 
-        #self._neighbors = np.concatenate((self._grid.neighbors_at_node, self._grid.diagonals_at_node), axis=1)
-        #self._neighbors[self._neighbors == BAD_INDEX_VALUE] = -1
         self._build_neighbors_list()
 
 
@@ -52,7 +122,22 @@ class FlowRouterOverFlat(Component):
 
 
     def route_flow(self, receiver, dem='topographic__elevation'):
-        #main
+        """
+        Route surface water flow over a landscape with flats.
+
+        Parameters:
+        -------
+        receiver : 
+            Node array of receivers (node that receives flow from current node)
+
+        Returns
+        -------
+        receiver : 
+            Node array of receivers (node that receives flow from current node)
+            with flow direction updated.
+
+        """
+
         self._dem = self._grid['node'][dem]
         """
         if receiver==None:
@@ -63,6 +148,8 @@ class FlowRouterOverFlat(Component):
         self._flow_receiver = receiver
         #(self._flow_receiver, ss) = grid_flow_directions(self._grid, self._dem)
 
+        # This class also supports cython, but python version is recommended because
+        # using cython does not increase the performance significantly.
         method = 'python'
         if method=='cython':
             from flow_direction_over_flat_cython import adjust_flow_direction
@@ -73,11 +160,6 @@ class FlowRouterOverFlat(Component):
             flat_mask, labels = self._resolve_flats()
             self._flow_receiver = self._flow_dirs_over_flat_d8(flat_mask, labels)
 
-
-        #a, q, s = flow_accum_bw.flow_accumulation(self._flow_receiver, self._open_boundary, node_cell_area=self._grid.forced_cell_areas)
-
-        #self._grid['node']['flow_receiver'] = self._flow_receiver
-
         return self._flow_receiver
 
 
@@ -86,37 +168,27 @@ class FlowRouterOverFlat(Component):
         is_flat = np.zeros(self._n, dtype=bool)
         node_id = np.arange(self._n, dtype=int)
         (sink, ) = np.where(node_id==self._flow_receiver)
-        #start_time = time.time()
         for node in sink:
             if node in self._close_boundary:
                 continue
             if not(is_flat[node]):
                 is_flat = self._identify_flats(is_flat, node)
-        #print '_identify_flats', time.time()-start_time
 
-        #start_time = time.time()
         high_edges, low_edges = self._flat_edges(is_flat)
-        #print '_flat_edges', time.time()-start_time
 
-        #start_time = time.time()
         labels = np.zeros(self._n, dtype='int')
         labelid = 1
         for node in low_edges:
             if labels[node]==0:
                 labels = self._label_flats(labels, node, labelid)
                 labelid += 1
-        #print '_label_flats', time.time()-start_time
 
         flat_mask = np.zeros(self._n, dtype='float')
         flat_height = np.zeros(labelid, dtype='float')
 
         #this part is bottleneck
-        #start_time = time.time()
         flat_mask, flat_height = self._away_from_higher(flat_mask, labels, flat_height, high_edges)
-        #print '_away_from_higher', time.time()-start_time
-        #start_time = time.time()
         flat_mask, flat_height = self._towards_lower(flat_mask, labels, flat_height, low_edges)
-        #print '_towards_lower', time.time()-start_time
 
         return flat_mask, labels
 
@@ -127,13 +199,6 @@ class FlowRouterOverFlat(Component):
         neighbors = self._neighbors
         boundary = self._boundary
         dem = self._dem
-
-        '''
-        to_fill = Queue.Queue(maxsize=self._n*2)
-        to_fill_put = to_fill.put
-        to_fill_get = to_fill.get
-        to_fill_empty = to_fill.empty
-        '''
 
         to_fill = deque(maxlen=self._n*2)
         to_fill_put = to_fill.append
@@ -173,12 +238,6 @@ class FlowRouterOverFlat(Component):
         close_boundary = self._close_boundary
         dem = self._dem
 
-        '''
-        low_edges = Queue.Queue(maxsize=self._n*2)
-        high_edges = Queue.Queue(maxsize=self._n*2)
-        high_put = high_edges.put
-        low_put = low_edges.put
-        '''
         low_edges = deque(maxlen=self._n*2)
         high_edges = deque(maxlen=self._n*2)
         high_put = high_edges.append
@@ -213,13 +272,6 @@ class FlowRouterOverFlat(Component):
         neighbors = self._neighbors
         boundary = self._boundary
         dem = self._dem
-
-        '''
-        to_fill = Queue.Queue(maxsize=self._n*2)
-        to_fill_put = to_fill.put
-        to_fill_get = to_fill.get
-        to_fill_empty = to_fill.empty
-        '''
 
         to_fill = deque(maxlen=self._n*2)
         to_fill_put = to_fill.append
@@ -258,12 +310,6 @@ class FlowRouterOverFlat(Component):
 
         k = 1
         MARKER = -100
-
-        '''
-        high_put = high_edges.put
-        high_get = high_edges.get
-        high_qsize = high_edges.qsize
-        '''
 
         high_put = high_edges.append
         high_get = high_edges.popleft
@@ -312,12 +358,6 @@ class FlowRouterOverFlat(Component):
         flat_mask = 0-flat_mask
         k = 1
         MARKER = -100
-        '''
-        low_put = low_edges.put
-        low_get = low_edges.get
-        low_qsize = low_edges.qsize
-        low_queue = low_edges.queue
-        '''
 
         low_put = low_edges.append
         low_get = low_edges.popleft
@@ -394,18 +434,6 @@ class FlowRouterOverFlat(Component):
                 continue
             if node in boundary:
                 continue
-            """
-            min_elev = flat_mask[node]
-            receiver = node
-            for neighbor_node in self._neighbors[node]:
-                if neighbor_node==-1:
-                    continue
-                if labels[neighbor_node]!=labels[node]:
-                    continue
-                if flat_mask[neighbor_node]<min_elev:
-                    min_elev = flat_mask[neighbor_node]
-                    receiver = neighbor_node
-            """
             potential_receiver = neighbors[node]
             potential_receiver = potential_receiver[np.where(potential_receiver!=-1)]
             potential_receiver = potential_receiver[np.where(labels[potential_receiver]==labels[node])]

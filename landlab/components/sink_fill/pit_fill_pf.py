@@ -2,7 +2,7 @@
 pit_fill_pf.py
 Priority-Flood algorithm (Barnes et al. 2014)
 
-Created by JL, Nov. 2015
+Created by J. Lai at UIUC (Nov 2015)
 """
 import numpy as np
 
@@ -13,6 +13,56 @@ from landlab import Component, FieldError
 from landlab.grid.base import BAD_INDEX_VALUE
 
 class PitFiller(Component):
+    """
+    This class uses the Priority-Flood algorithm (Barnes et al. 2014) to 
+    fill the depressions in a grid. This module fills the depressions by 
+    flooding the whole domain inwards from the open boundaries, and a priority 
+    queue is used to guarantee that all the depressions are filled up to 
+    their spillover points.
+
+    The primary function of this class is :func:`pit_fill`.
+
+    Construction:
+
+        PitFiller(grid)
+
+    Parameters
+    ----------
+    grid : RasterModelGrid
+        A grid.
+
+
+    Returns
+    -------
+    grid : RasterModelGrid
+        A reference to the grid.
+    """
+
+    _name = 'PitFiller'
+
+    _input_var_names = (
+        'topographic__elevation'
+    )
+
+    _output_var_names = (
+        'topographic__elevation',
+        'topographic__depressions'
+    )
+
+    _var_units = {
+        'topographic__elevation': 'm',
+        'topographic__depressions': '-',
+    }
+
+    _var_mapping = {
+        'topographic__elevation': 'node',
+        'topographic__depressions': 'node',
+    }
+
+    _var_doc = {
+        'topographic__elevation': 'Land surface topographic elevation',
+        'topographic__depressions': 'A bool array. If a node is part of a depression, then the value is True.'
+    }
 
     def __init__(self, input_grid):
 
@@ -22,8 +72,6 @@ class PitFiller(Component):
         (self._open_boundary, ) = np.where(np.logical_or(self._grid.status_at_node==1, self._grid.status_at_node==2))
         (self._close_boundary, ) = np.where(self._grid.status_at_node==4)
 
-        #self._neighbors = np.concatenate((self._grid.neighbors_at_node, self._grid.diagonals_at_node), axis=1)
-        #self._neighbors[self._neighbors == BAD_INDEX_VALUE] = -1
         self._build_neighbors_list()
 
     def _build_neighbors_list(self):
@@ -53,6 +101,7 @@ class PitFiller(Component):
         raised_node = Queue.Queue(maxsize=self._n)
         priority_queue = Queue.PriorityQueue(maxsize=self._n)
 
+        # giving each function a reference will increase performance greatly.
         raised_put = raised_node.put
         raised_get = raised_node.get
         priority_put = priority_queue.put
@@ -86,4 +135,5 @@ class PitFiller(Component):
 
         self._grid.at_node['topographic__elevation'] = dem
         self._grid.at_node['topographic__depressions'] = depressions
+
         return self._grid
